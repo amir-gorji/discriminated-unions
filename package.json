@@ -1,0 +1,8 @@
+{
+  "name": "discriminated-union-tools",
+  "version": "0.0.1",
+  "main": "index.ts",
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}

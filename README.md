@@ -53,7 +53,10 @@ Add a new variant. TypeScript screams at every `match` call that's missing a han
 
 ### `match(union)(handlers)` — Exhaustive Pattern Matching
 
-Every variant must have a handler. Miss one and TypeScript won't compile.
+Every variant must have a handler. Exhaustiveness is enforced at two levels:
+
+- **Compile time** — TypeScript won't compile if any variant is missing a handler.
+- **Runtime** — if a value bypasses the type system (e.g. via `any`, a cast, or an unexpected API response), `match` throws rather than silently doing nothing.
 
 ```ts
 type Result =

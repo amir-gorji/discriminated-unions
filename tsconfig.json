@@ -1,16 +1,14 @@
 {
   "compilerOptions": {
     "target": "ES2020",
-    "module": "CommonJS",
+    "module": "Preserve",
+    "moduleResolution": "Bundler",
     "lib": ["ES2020"],
-    "declaration": true,
-    "outDir": "./lib",
-    "rootDir": "./src",
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
-    "moduleResolution": "node"
+    "noEmit": true
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "**/__tests__/*", "src/playground.ts"]

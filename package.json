@@ -3,7 +3,21 @@
   "description": "A lightweight discriminated unions library for TypeScript",
   "version": "0.1.0",
   "main": "lib/index.js",
+  "module": "lib/index.mjs",
   "types": "lib/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./lib/index.d.mts",
+        "default": "./lib/index.mjs"
+      },
+      "require": {
+        "types": "./lib/index.d.ts",
+        "default": "./lib/index.js"
+      }
+    }
+  },
+  "sideEffects": false,
   "keywords": [
     "typescript",
     "discriminated-unions",
@@ -18,18 +32,19 @@
   "author": "Amir Gorji",
   "license": "MIT",
   "scripts": {
-    "build": "tsc",
+    "build": "tsup",
     "clean": "rm -rf lib",
     "test": "vitest run",
     "test:watch": "vitest",
     "ts:ci": "tsc --noEmit",
-    "prepublishOnly": "npm run clean && npm run ts:ci && npm run test && npm run build"
+    "prepublishOnly": "npm run ts:ci && npm run test && npm run build"
   },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/amir-gorji/dismatch.git"
   },
   "devDependencies": {
+    "tsup": "^8.5.1",
     "typescript": "^5.9.3",
     "vitest": "^4.0.18"
   }

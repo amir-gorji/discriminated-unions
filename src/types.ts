@@ -9,7 +9,7 @@
  * // MyUnion satisfies SampleUnion
  * ```
  */
-export type SampleUnion<Discriminant extends string> = {
+export type SampleUnion<Discriminant extends string | number | symbol> = {
   [K in Discriminant]: any;
 };
 
@@ -34,7 +34,7 @@ export type SampleUnion<Discriminant extends string> = {
 export type Model<
   DiscriminantValue extends string,
   Data,
-  Discriminant extends string,
+  Discriminant extends string | number | symbol,
 > = {
   [K in Discriminant]: DiscriminantValue;
 } & Data;
@@ -60,7 +60,7 @@ export type Model<
 export type Matcher<
   T extends SampleUnion<Discriminant>,
   Result,
-  Discriminant extends string,
+  Discriminant extends string | number | symbol,
 > = {
   [K in T[Discriminant]]: T extends Model<K, infer Data, Discriminant>
     ? (input: Data) => Result
@@ -88,7 +88,7 @@ export type Matcher<
 export type MatcherWithDefault<
   T extends SampleUnion<Discriminant>,
   Result,
-  Discriminant extends string,
+  Discriminant extends string | number | symbol,
 > = Partial<Matcher<T, Result, Discriminant>> & { Default: () => Result };
 
 /**
@@ -110,7 +110,7 @@ export type MatcherWithDefault<
  */
 export type Mapper<
   T extends SampleUnion<Discriminant>,
-  Discriminant extends string,
+  Discriminant extends string | number | symbol,
 > = {
   [K in T[Discriminant]]?: T extends Model<K, infer Data, Discriminant>
     ? (input: Data) => Data
@@ -136,9 +136,17 @@ export type Mapper<
  */
 export type MapperAll<
   T extends SampleUnion<Discriminant>,
-  Discriminant extends string,
+  Discriminant extends string | number | symbol,
 > = {
   [K in T[Discriminant]]: T extends Model<K, infer Data, Discriminant>
     ? (input: Data) => Data
     : never;
 };
+
+export type TakeDiscriminant<T, K extends keyof T = keyof T> = K extends keyof T
+  ? T[K] extends string | number | symbol
+    ? string extends T[K]
+      ? never
+      : K // excludes wide types
+    : never
+  : never;

@@ -21,7 +21,7 @@ import {
  * isUnion({ status: 'ok' }, 'status');     // true
  * ```
  */
-export function isUnion<Discriminant extends string>(
+export function isUnion<Discriminant extends string | number | symbol>(
   input: any,
   discriminant: Discriminant = 'type' as Discriminant,
 ): input is SampleUnion<Discriminant> {
@@ -41,7 +41,7 @@ export function isUnion<Discriminant extends string>(
 function match<
   T extends SampleUnion<Discriminant>,
   Result,
-  Discriminant extends string,
+  Discriminant extends string | number | symbol,
 >(
   union: T,
   matcher: Matcher<T, Result, Discriminant>,
@@ -64,7 +64,7 @@ function match<
 function matchWithDefault<
   T extends SampleUnion<Discriminant>,
   Result,
-  Discriminant extends string,
+  Discriminant extends string | number | symbol,
 >(
   union: T,
   matcher: MatcherWithDefault<T, Result, Discriminant>,
@@ -85,7 +85,10 @@ function matchWithDefault<
  *
  * @internal Used by the public API in `unions.ts`. Not exported directly.
  */
-function map<T extends SampleUnion<Discriminant>, Discriminant extends string>(
+function map<
+  T extends SampleUnion<Discriminant>,
+  Discriminant extends string | number | symbol,
+>(
   union: T,
   mapper: Mapper<T, Discriminant>,
   discriminant: Discriminant = 'type' as Discriminant,
@@ -109,7 +112,7 @@ function map<T extends SampleUnion<Discriminant>, Discriminant extends string>(
  */
 function mapAll<
   T extends SampleUnion<Discriminant>,
-  Discriminant extends string,
+  Discriminant extends string | number | symbol,
 >(
   union: T,
   mapper: MapperAll<T, Discriminant>,
@@ -136,7 +139,7 @@ function mapAll<
 export function is<
   T extends { [K in Discriminant]: string },
   U extends T[Discriminant],
-  Discriminant extends string = 'type',
+  Discriminant extends string | number | symbol = 'type',
 >(
   union: T,
   type: U,

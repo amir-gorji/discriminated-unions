@@ -26,5 +26,5 @@ export type { Model } from './types';
  */
 export type UnionByArray<
   T extends Model<string, any, Discriminant>[],
-  Discriminant extends string = 'type',
+  Discriminant extends string | number | symbol = 'type',
 > = T[number];

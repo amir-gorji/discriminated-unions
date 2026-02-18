@@ -26,7 +26,7 @@ import {
  */
 export function map<
   T extends SampleUnion<Discriminant>,
-  Discriminant extends string = 'type',
+  Discriminant extends string | number | symbol = 'type',
 >(
   input: T,
   discriminant: Discriminant = 'type' as Discriminant,
@@ -60,7 +60,7 @@ export function map<
  */
 export function mapAll<
   T extends SampleUnion<Discriminant>,
-  Discriminant extends string = 'type',
+  Discriminant extends string | number | symbol = 'type',
 >(
   input: T,
   discriminant: Discriminant = 'type' as Discriminant,
@@ -95,7 +95,7 @@ export function mapAll<
  */
 export function match<
   T extends SampleUnion<Discriminant>,
-  Discriminant extends string = 'type',
+  Discriminant extends string | number | symbol = 'type',
 >(
   input: T,
   discriminant: Discriminant = 'type' as Discriminant,
@@ -130,7 +130,7 @@ export function match<
  */
 export function matchWithDefault<
   T extends SampleUnion<Discriminant>,
-  Discriminant extends string = 'type',
+  Discriminant extends string | number | symbol = 'type',
 >(
   input: T,
   discriminant: Discriminant = 'type' as Discriminant,

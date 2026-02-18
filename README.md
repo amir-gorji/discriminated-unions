@@ -328,4 +328,4 @@ npm run ts:ci        # Type check (no emit)
 
 ## License
 
-ISC
+MIT (refer to LICENSE file)

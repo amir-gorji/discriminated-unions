@@ -129,9 +129,9 @@ const circles = shapes.filter((s) => is(s, 'circle'));
 // circles: { type: 'circle'; radius: number }[]
 ```
 
-### `isUnion(value)` — Runtime Validation
+### `isUnion(value, discriminant?)` — Runtime Validation
 
-Checks whether a value is a valid discriminated union (a non-null object with a string `type` property). Useful at system boundaries — API responses, form data, anything you can't trust at compile time.
+Checks whether a value is a valid discriminated union (a non-null object with a string discriminant property). Useful at system boundaries — API responses, form data, anything you can't trust at compile time.
 
 ```ts
 import { isUnion } from 'dismatch';
@@ -140,6 +140,10 @@ isUnion({ type: 'circle', radius: 5 }); // true
 isUnion({ name: 'no type field' });      // false
 isUnion(null);                            // false
 isUnion('string');                        // false
+
+// Custom discriminant
+isUnion({ kind: 'click', x: 10 }, 'kind'); // true
+isUnion({ type: 'circle' }, 'kind');        // false
 ```
 
 ## Defining Your Unions
@@ -164,6 +168,38 @@ type Unauthorized = Model<'unauthorized', {}>;
 
 type ApiResponse = Success | ApiError | Unauthorized;
 ```
+
+## Custom Discriminant Property
+
+By default, dismatch uses `type` as the discriminant property. If your unions use a different field — common in API responses that use `status` — pass it as a second argument to any function:
+
+```ts
+type ApiResponse<T> =
+  | { status: 'success'; data: T }
+  | { status: 'error'; message: string; code: number }
+  | { status: 'loading' };
+
+const response: ApiResponse<User[]> = await fetchUsers();
+
+// Handlers can be async — the inferred return type becomes Promise<...>
+const users = await match(response, 'status')({
+  success: async ({ data }) => normalize(data),
+  error: ({ message, code }) => Promise.reject(new ApiError(message, code)),
+  loading: async () => [],
+});
+```
+
+Every function in the API accepts the discriminant as an optional extra argument:
+
+```ts
+matchWithDefault(response, 'status')({ error: ..., Default: ... });
+map(response, 'status')({ error: ... });
+mapAll(response, 'status')({ success: ..., error: ..., loading: ... });
+is(response, 'success', 'status');
+isUnion(response, 'status');
+```
+
+TypeScript infers the discriminant from the type, so you keep full type safety regardless of what field name you use.
 
 ## Curried by Design
 
@@ -254,6 +290,29 @@ const markEmailsRead = (n: Notification) =>
     email: ({ type, subject }) => ({ type, subject, read: true }),
   });
 ```
+
+## Clean Stack Traces
+
+When dismatch throws an error (e.g. you pass a non-union value), the stack trace points directly to your call site — not into minified library internals.
+
+Most libraries don't do this. Without stack trace clearing, you get noise like:
+
+```
+Error: Data is not of type discriminated union!
+    at Object.<anonymous> (node_modules/some-lib/dist/index.cjs:1:3842)
+    at Object.<anonymous> (node_modules/some-lib/dist/index.cjs:1:1205)
+    at Object.<anonymous> (node_modules/some-lib/dist/index.cjs:1:892)
+    at handleResponse (src/api/users.ts:27:18)
+```
+
+The real call site is buried under a wall of minified package frames. With dismatch, the stack starts where you actually made the mistake:
+
+```
+Error: Data is not of type discriminated union!
+    at handleResponse (src/api/users.ts:27:18)
+```
+
+This works via `Error.captureStackTrace` (V8/Node.js). In environments that don't support it the error is still thrown — the stack just isn't trimmed.
 
 ## Scripts
 

@@ -9,156 +9,139 @@ import {
 } from './types';
 
 /**
- * Partially transforms a discriminated union value. Returns a curried function
- * that accepts a {@link Mapper} with optional handlers for each variant.
- * Variants without a handler pass through unchanged (identity).
+ * Partially transforms a discriminated union. Variants without a handler pass through unchanged.
  *
- * @typeParam T - The discriminated union type
  * @param input - The discriminated union value to transform
- * @returns A function that takes a partial mapper and returns the (possibly transformed) union value
- * @throws {Error} If `input` is not a valid discriminated union (missing or falsy `type` property)
+ * @param discriminant - The property used to tell variants apart. Defaults to `'type'`.
+ * @returns A curried function that accepts a partial handler map and returns the (possibly transformed) value
+ * @throws {Error} If `input` is not a valid discriminated union
  *
  * @example
  * ```ts
- * type Shape =
- *   | { type: 'circle'; radius: number }
- *   | { type: 'rectangle'; width: number; height: number };
- *
- * const circle: Shape = { type: 'circle', radius: 5 };
- *
- * // Only transform circles, rectangles pass through unchanged
  * const result = map(circle)({
  *   circle: ({ type, radius }) => ({ type, radius: radius * 2 }),
  * });
- * // result: { type: 'circle', radius: 10 }
+ * // rectangles pass through unchanged
  * ```
  */
-export function map<T extends SampleUnion>(input: T): (mapper: Mapper<T>) => T {
+export function map<
+  T extends SampleUnion<Discriminant>,
+  Discriminant extends string = 'type',
+>(
+  input: T,
+  discriminant: Discriminant = 'type' as Discriminant,
+): (mapper: Mapper<T, Discriminant>) => T {
   try {
-    if (!isUnion(input)) {
+    if (!isUnion(input, discriminant)) {
       throw new Error('Data is not of type discriminated union!');
     }
-    return (mapper: Mapper<T>) => Module.map(input, mapper);
+    return (mapper: Mapper<T, Discriminant>) =>
+      Module.map(input, mapper, discriminant);
   } catch (err) {
     throw clearStackTrace(err, map);
   }
 }
 
 /**
- * Fully transforms a discriminated union value. Returns a curried function
- * that accepts a {@link MapperAll} with a required handler for **every** variant.
- * Unlike {@link map}, no variant can be omitted.
+ * Fully transforms a discriminated union. Every variant must have a handler — unlike {@link map}, nothing passes through by default.
  *
- * @typeParam T - The discriminated union type
  * @param input - The discriminated union value to transform
- * @returns A function that takes a full mapper and returns the transformed union value
- * @throws {Error} If `input` is not a valid discriminated union (missing or falsy `type` property)
+ * @param discriminant - The property used to tell variants apart. Defaults to `'type'`.
+ * @returns A curried function that accepts a full handler map and returns the transformed value
+ * @throws {Error} If `input` is not a valid discriminated union
  *
  * @example
  * ```ts
- * type Shape =
- *   | { type: 'circle'; radius: number }
- *   | { type: 'rectangle'; width: number; height: number };
- *
- * const shape: Shape = { type: 'circle', radius: 5 };
- *
  * const result = mapAll(shape)({
  *   circle: ({ type, radius }) => ({ type, radius: radius * 2 }),
  *   rectangle: ({ type, width, height }) => ({ type, width: width * 2, height: height * 2 }),
  * });
  * ```
  */
-export function mapAll<T extends SampleUnion>(
+export function mapAll<
+  T extends SampleUnion<Discriminant>,
+  Discriminant extends string = 'type',
+>(
   input: T,
-): (mapper: MapperAll<T>) => T {
+  discriminant: Discriminant = 'type' as Discriminant,
+): (mapper: MapperAll<T, Discriminant>) => T {
   try {
-    if (!isUnion(input)) {
+    if (!isUnion(input, discriminant)) {
       throw new Error('Data is not of type discriminated union!');
     }
-    return (mapper: MapperAll<T>) => Module.mapAll(input, mapper);
+    return (mapper: MapperAll<T, Discriminant>) =>
+      Module.mapAll(input, mapper, discriminant);
   } catch (err) {
     throw clearStackTrace(err, mapAll);
   }
 }
 
 /**
- * Exhaustive pattern matching on a discriminated union. Returns a curried function
- * that accepts a {@link Matcher} with a handler for **every** variant in the union.
- * The matched handler is invoked with the variant's data and its return value is returned.
+ * Exhaustive pattern matching on a discriminated union. Every variant must have a handler.
+ * If a new variant is added to the union, TypeScript will error at every unhandled `match` call.
  *
- * This guarantees at compile time that all variants are handled — if a new variant
- * is added to the union, TypeScript will error until a handler is provided.
- *
- * @typeParam T - The discriminated union type
  * @param input - The discriminated union value to match against
- * @returns A function that takes an exhaustive matcher and returns the handler's result
- * @throws {Error} If `input` is not a valid discriminated union (missing or falsy `type` property)
+ * @param discriminant - The property used to tell variants apart. Defaults to `'type'`.
+ * @returns A curried function that accepts a handler map and returns the matched handler's result
+ * @throws {Error} If `input` is not a valid discriminated union
  *
  * @example
  * ```ts
- * type Shape =
- *   | { type: 'circle'; radius: number }
- *   | { type: 'rectangle'; width: number; height: number };
- *
- * const shape: Shape = { type: 'circle', radius: 5 };
- *
  * const area = match(shape)({
  *   circle: ({ radius }) => Math.PI * radius ** 2,
  *   rectangle: ({ width, height }) => width * height,
  * });
- * // area: 78.539...
  * ```
  */
-export function match<T extends SampleUnion>(
+export function match<
+  T extends SampleUnion<Discriminant>,
+  Discriminant extends string = 'type',
+>(
   input: T,
-): <U>(mapper: Matcher<T, U>) => U {
+  discriminant: Discriminant = 'type' as Discriminant,
+): <U>(mapper: Matcher<T, U, Discriminant>) => U {
   try {
-    if (!isUnion(input)) {
+    if (!isUnion(input, discriminant)) {
       throw new Error('Data is not of type discriminated union!');
     }
 
-    return <U>(matcher: Matcher<T, U>) => Module.match<T, U>(input, matcher);
+    return <U>(matcher: Matcher<T, U, Discriminant>) =>
+      Module.match<T, U, Discriminant>(input, matcher, discriminant);
   } catch (err) {
     throw clearStackTrace(err, match);
   }
 }
 
 /**
- * Non-exhaustive pattern matching on a discriminated union with a default fallback.
- * Returns a curried function that accepts a {@link MatcherWithDefault} — individual
- * variant handlers are optional, but a `Default` handler is required for unmatched variants.
+ * Pattern matching with a fallback. Handle specific variants explicitly; `Default` catches the rest.
  *
- * @typeParam T - The discriminated union type
  * @param input - The discriminated union value to match against
- * @returns A function that takes a partial matcher with Default and returns the handler's result
- * @throws {Error} If `input` is not a valid discriminated union (missing or falsy `type` property)
+ * @param discriminant - The property used to tell variants apart. Defaults to `'type'`.
+ * @returns A curried function that accepts a partial handler map (with required `Default`) and returns the result
+ * @throws {Error} If `input` is not a valid discriminated union
  *
  * @example
  * ```ts
- * type Shape =
- *   | { type: 'circle'; radius: number }
- *   | { type: 'rectangle'; width: number; height: number }
- *   | { type: 'triangle'; base: number; height: number };
- *
- * const shape: Shape = { type: 'triangle', base: 10, height: 5 };
- *
- * const description = matchWithDefault(shape)({
- *   circle: ({ radius }) => `Circle with radius ${radius}`,
+ * const label = matchWithDefault(shape)({
+ *   circle: ({ radius }) => `Circle r=${radius}`,
  *   Default: () => 'Some other shape',
  * });
- * // description: 'Some other shape'
  * ```
  */
-export function matchWithDefault<T extends SampleUnion>(
+export function matchWithDefault<
+  T extends SampleUnion<Discriminant>,
+  Discriminant extends string = 'type',
+>(
   input: T,
-): <U>(matcher: MatcherWithDefault<T, U>) => U {
+  discriminant: Discriminant = 'type' as Discriminant,
+): <U>(matcher: MatcherWithDefault<T, U, Discriminant>) => U {
   try {
-    if (!isUnion(input)) {
+    if (!isUnion(input, discriminant)) {
       throw new Error('Data is not of type discriminated union!');
     }
 
-    return <U>(matcher: MatcherWithDefault<T, U>) =>
-      Module.matchWithDefault<T, U>(input, matcher);
+    return <U>(matcher: MatcherWithDefault<T, U, Discriminant>) =>
+      Module.matchWithDefault<T, U, Discriminant>(input, matcher, discriminant);
   } catch (err) {
     throw clearStackTrace(err, matchWithDefault);
   }

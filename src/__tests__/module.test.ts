@@ -5,6 +5,11 @@ type Shape =
   | { type: 'circle'; radius: number }
   | { type: 'rectangle'; width: number; height: number };
 
+type Animal =
+  | { kind: 'dog'; name: string }
+  | { kind: 'cat'; lives: number }
+  | { kind: 'bird'; canFly: boolean };
+
 describe('isUnion', () => {
   it('should return true for object with truthy type property', () => {
     expect(isUnion({ type: 'circle' })).toBe(true);
@@ -99,6 +104,43 @@ describe('is', () => {
       expect(shape.height).toBe(7);
     } else {
       expect.unreachable('Expected rectangle variant');
+    }
+  });
+});
+
+describe('isUnion with custom discriminant', () => {
+  it('should return true for object with matching custom discriminant', () => {
+    expect(isUnion({ kind: 'circle' }, 'kind')).toBe(true);
+  });
+
+  it('should return false for object with custom discriminant when using default', () => {
+    expect(isUnion({ kind: 'circle' })).toBe(false);
+  });
+
+  it('should return false for object with type property when discriminant is kind', () => {
+    expect(isUnion({ type: 'circle' }, 'kind')).toBe(false);
+  });
+});
+
+describe('is with custom discriminant', () => {
+  const dog: Animal = { kind: 'dog', name: 'Rex' };
+  const cat: Animal = { kind: 'cat', lives: 9 };
+
+  it('should return true when custom discriminant matches', () => {
+    expect(is(dog, 'dog', 'kind')).toBe(true);
+  });
+
+  it('should return false when custom discriminant does not match', () => {
+    expect(is(dog, 'cat', 'kind')).toBe(false);
+  });
+
+  it('should narrow the type correctly with custom discriminant', () => {
+    const animal: Animal = { kind: 'cat', lives: 9 };
+
+    if (is(animal, 'cat', 'kind')) {
+      expect(animal.lives).toBe(9);
+    } else {
+      expect.unreachable('Expected cat variant');
     }
   });
 });

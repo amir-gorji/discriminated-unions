@@ -7,39 +7,47 @@ import {
 } from './types';
 
 /**
- * Type predicate that checks whether the given value is a valid discriminated union
- * (a non-null object with a string `type` property).
+ * Checks whether a value is a valid discriminated union — a non-null object with a string discriminant property.
+ * Useful at system boundaries like API responses or form data.
  *
  * @param input - The value to check
- * @returns `true` if the value is an object with a string `type` property, `false` otherwise
+ * @param discriminant - The property to look for. Defaults to `'type'`.
+ * @returns `true` if `input` is an object with a string value at the discriminant key
  *
  * @example
  * ```ts
  * isUnion({ type: 'circle', radius: 5 }); // true
  * isUnion({ name: 'not a union' });        // false
- * isUnion(null);                            // false
- * isUnion({ type: 123 });                   // false
+ * isUnion({ status: 'ok' }, 'status');     // true
  * ```
  */
-export function isUnion(input: any): input is SampleUnion {
+export function isUnion<Discriminant extends string>(
+  input: any,
+  discriminant: Discriminant = 'type' as Discriminant,
+): input is SampleUnion<Discriminant> {
   return (
     typeof input === 'object' &&
     input !== null &&
-    typeof input.type === 'string'
+    typeof input[discriminant] === 'string'
   );
 }
 
 /**
  * Core implementation of exhaustive pattern matching.
- * Looks up the handler for the union's `type` discriminant and invokes it.
+ * Looks up the handler for the union's discriminant value and invokes it.
  *
  * @internal Used by the public API in `unions.ts`. Not exported directly.
  */
-function match<T extends SampleUnion, Result>(
+function match<
+  T extends SampleUnion<Discriminant>,
+  Result,
+  Discriminant extends string,
+>(
   union: T,
-  matcher: Matcher<T, Result>,
+  matcher: Matcher<T, Result, Discriminant>,
+  discriminant: Discriminant = 'type' as Discriminant,
 ): Result {
-  const fn = matcher[union.type as keyof Matcher<T, Result>];
+  const fn = matcher[union[discriminant]];
   if (!fn) {
     throw new Error('Matcher incomplete!');
   }
@@ -49,15 +57,21 @@ function match<T extends SampleUnion, Result>(
 
 /**
  * Core implementation of non-exhaustive pattern matching with a default fallback.
- * If no handler exists for the union's `type`, the `Default` handler is called.
+ * If no handler exists for the union's discriminant value, the `Default` handler is called.
  *
  * @internal Used by the public API in `unions.ts`. Not exported directly.
  */
-function matchWithDefault<T extends SampleUnion, Result>(
+function matchWithDefault<
+  T extends SampleUnion<Discriminant>,
+  Result,
+  Discriminant extends string,
+>(
   union: T,
-  matcher: MatcherWithDefault<T, Result>,
+  matcher: MatcherWithDefault<T, Result, Discriminant>,
+  discriminant: Discriminant = 'type' as Discriminant,
 ): Result {
-  const fn = matcher[union.type as keyof Matcher<T, Result>];
+  const fn =
+    matcher[union[discriminant] as keyof Matcher<T, Result, Discriminant>];
   if (!fn) {
     return matcher['Default']();
   }
@@ -71,11 +85,19 @@ function matchWithDefault<T extends SampleUnion, Result>(
  *
  * @internal Used by the public API in `unions.ts`. Not exported directly.
  */
-function map<T extends SampleUnion>(union: T, mapper: Mapper<T>): T {
-  return matchWithDefault<T, T>(union, {
-    ...mapper,
-    Default: () => union,
-  });
+function map<T extends SampleUnion<Discriminant>, Discriminant extends string>(
+  union: T,
+  mapper: Mapper<T, Discriminant>,
+  discriminant: Discriminant = 'type' as Discriminant,
+): T {
+  return matchWithDefault<T, T, Discriminant>(
+    union,
+    {
+      ...mapper,
+      Default: () => union,
+    },
+    discriminant,
+  );
 }
 
 /**
@@ -85,39 +107,42 @@ function map<T extends SampleUnion>(union: T, mapper: Mapper<T>): T {
  *
  * @internal Used by the public API in `unions.ts`. Not exported directly.
  */
-function mapAll<T extends SampleUnion>(union: T, mapper: MapperAll<T>): T {
-  return map<T>(union, mapper);
+function mapAll<
+  T extends SampleUnion<Discriminant>,
+  Discriminant extends string,
+>(
+  union: T,
+  mapper: MapperAll<T, Discriminant>,
+  discriminant: Discriminant = 'type' as Discriminant,
+): T {
+  return map<T, Discriminant>(union, mapper, discriminant);
 }
 
 /**
- * Type guard that narrows a discriminated union to a specific variant
- * by checking whether the `type` discriminant matches the given string.
+ * Type guard that narrows a discriminated union to a specific variant.
  *
- * @typeParam T - The discriminated union type (must have a `type` property)
- * @typeParam U - The specific type literal to check against
  * @param union - The discriminated union value to check
- * @param type - The type discriminant string to match against
- * @returns `true` if `union.type === type`, narrowing the union to `Extract<T, { type: U }>`
+ * @param type - The variant value to match against
+ * @param discriminant - The property used to tell variants apart. Defaults to `'type'`.
+ * @returns `true` if the discriminant property equals `type`, narrowing to that variant
  *
  * @example
  * ```ts
- * type Shape =
- *   | { type: 'circle'; radius: number }
- *   | { type: 'rectangle'; width: number; height: number };
- *
- * declare const shape: Shape;
- *
  * if (is(shape, 'circle')) {
- *   // shape is narrowed to { type: 'circle'; radius: number }
- *   console.log(shape.radius);
+ *   console.log(shape.radius); // TypeScript knows it's a circle
  * }
  * ```
  */
-export function is<T extends { type: string }, U extends T['type']>(
+export function is<
+  T extends { [K in Discriminant]: string },
+  U extends T[Discriminant],
+  Discriminant extends string = 'type',
+>(
   union: T,
   type: U,
-): union is Extract<T, { type: U }> {
-  return union.type === type;
+  discriminant: Discriminant = 'type' as Discriminant,
+): union is Extract<T, { [K in Discriminant]: U }> {
+  return union[discriminant] === type;
 }
 
 /**

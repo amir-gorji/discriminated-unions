@@ -24,4 +24,7 @@ export type { Model } from './types';
  * // Model<'circle', { radius: number }> | Model<'rectangle', { width: number; height: number }>
  * ```
  */
-export type UnionByArray<T extends Model<string, any>[]> = T[number];
+export type UnionByArray<
+  T extends Model<string, any, Discriminant>[],
+  Discriminant extends string = 'type',
+> = T[number];

@@ -6,6 +6,11 @@ type Shape =
   | { type: 'rectangle'; width: number; height: number }
   | { type: 'triangle'; base: number; height: number };
 
+type Animal =
+  | { kind: 'dog'; name: string }
+  | { kind: 'cat'; lives: number }
+  | { kind: 'bird'; canFly: boolean };
+
 const circle: Shape = { type: 'circle', radius: 5 };
 const rectangle: Shape = { type: 'rectangle', width: 4, height: 6 };
 const triangle: Shape = { type: 'triangle', base: 10, height: 3 };
@@ -273,5 +278,84 @@ describe('mapAll', () => {
     expect(() => mapAll(undefined as any)).toThrow(
       'Data is not of type discriminated union!',
     );
+  });
+});
+
+const dog: Animal = { kind: 'dog', name: 'Rex' };
+const cat: Animal = { kind: 'cat', lives: 9 };
+const bird: Animal = { kind: 'bird', canFly: true };
+
+describe('match with custom discriminant', () => {
+  const animalMatcher = {
+    dog: ({ name }: { kind: 'dog'; name: string }) => `Dog: ${name}`,
+    cat: ({ lives }: { kind: 'cat'; lives: number }) => `Cat: ${lives} lives`,
+    bird: ({ canFly }: { kind: 'bird'; canFly: boolean }) =>
+      `Bird: ${canFly ? 'can fly' : 'cannot fly'}`,
+  };
+
+  it('should return correct result for dog variant', () => {
+    const result = match(dog, 'kind')(animalMatcher);
+    expect(result).toBe('Dog: Rex');
+  });
+
+  it('should return correct result for cat variant', () => {
+    const result = match(cat, 'kind')(animalMatcher);
+    expect(result).toBe('Cat: 9 lives');
+  });
+
+  it('should return correct result for bird variant', () => {
+    const result = match(bird, 'kind')(animalMatcher);
+    expect(result).toBe('Bird: can fly');
+  });
+
+  it('should throw for invalid input with custom discriminant', () => {
+    expect(() => match({ type: 'dog' } as any, 'kind')).toThrow(
+      'Data is not of type discriminated union!',
+    );
+  });
+});
+
+describe('matchWithDefault with custom discriminant', () => {
+  it('should match specific variant with custom discriminant', () => {
+    const result = matchWithDefault(dog, 'kind')({
+      dog: ({ name }) => `Dog: ${name}`,
+      Default: () => 'Unknown animal',
+    });
+    expect(result).toBe('Dog: Rex');
+  });
+
+  it('should fall back to Default for unhandled variant', () => {
+    const result = matchWithDefault(bird, 'kind')({
+      dog: ({ name }) => `Dog: ${name}`,
+      Default: () => 'Unknown animal',
+    });
+    expect(result).toBe('Unknown animal');
+  });
+});
+
+describe('map with custom discriminant', () => {
+  it('should transform matched variant with custom discriminant', () => {
+    const result = map(cat, 'kind')({
+      cat: ({ kind, lives }) => ({ kind, lives: lives - 1 }),
+    });
+    expect(result).toEqual({ kind: 'cat', lives: 8 });
+  });
+
+  it('should pass through unmatched variant with custom discriminant', () => {
+    const result = map(dog, 'kind')({
+      cat: ({ kind, lives }) => ({ kind, lives: lives - 1 }),
+    });
+    expect(result).toBe(dog);
+  });
+});
+
+describe('mapAll with custom discriminant', () => {
+  it('should transform all variants correctly with custom discriminant', () => {
+    const result = mapAll(dog, 'kind')({
+      dog: ({ kind, name }) => ({ kind, name: name.toUpperCase() }),
+      cat: ({ kind, lives }) => ({ kind, lives: lives + 1 }),
+      bird: ({ kind, canFly }) => ({ kind, canFly: !canFly }),
+    });
+    expect(result).toEqual({ kind: 'dog', name: 'REX' });
   });
 });

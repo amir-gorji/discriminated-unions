@@ -9,7 +9,9 @@
  * // MyUnion satisfies SampleUnion
  * ```
  */
-export type SampleUnion = { [type: string]: any };
+export type SampleUnion<Discriminant extends string> = {
+  [K in Discriminant]: any;
+};
 
 /**
  * Constructs a single variant of a discriminated union.
@@ -29,8 +31,12 @@ export type SampleUnion = { [type: string]: any };
  * type Shape = Circle | Rectangle;
  * ```
  */
-export type Model<Discriminant extends string, Data> = {
-  type: Discriminant;
+export type Model<
+  DiscriminantValue extends string,
+  Data,
+  Discriminant extends string,
+> = {
+  [K in Discriminant]: DiscriminantValue;
 } & Data;
 
 /**
@@ -51,8 +57,12 @@ export type Model<Discriminant extends string, Data> = {
  * };
  * ```
  */
-export type Matcher<T extends SampleUnion, Result> = {
-  [K in T['type']]: T extends Model<K, infer Data>
+export type Matcher<
+  T extends SampleUnion<Discriminant>,
+  Result,
+  Discriminant extends string,
+> = {
+  [K in T[Discriminant]]: T extends Model<K, infer Data, Discriminant>
     ? (input: Data) => Result
     : never;
 };
@@ -75,9 +85,11 @@ export type Matcher<T extends SampleUnion, Result> = {
  * };
  * ```
  */
-export type MatcherWithDefault<T extends SampleUnion, Result> = Partial<
-  Matcher<T, Result>
-> & { Default: () => Result };
+export type MatcherWithDefault<
+  T extends SampleUnion<Discriminant>,
+  Result,
+  Discriminant extends string,
+> = Partial<Matcher<T, Result, Discriminant>> & { Default: () => Result };
 
 /**
  * Partial transformation map for discriminated unions.
@@ -96,8 +108,11 @@ export type MatcherWithDefault<T extends SampleUnion, Result> = Partial<
  * // rectangle variants pass through unchanged
  * ```
  */
-export type Mapper<T extends SampleUnion> = {
-  [K in T['type']]?: T extends Model<K, infer Data>
+export type Mapper<
+  T extends SampleUnion<Discriminant>,
+  Discriminant extends string,
+> = {
+  [K in T[Discriminant]]?: T extends Model<K, infer Data, Discriminant>
     ? (input: Data) => Data
     : never;
 };
@@ -119,8 +134,11 @@ export type Mapper<T extends SampleUnion> = {
  * };
  * ```
  */
-export type MapperAll<T extends SampleUnion> = {
-  [K in T['type']]: T extends Model<K, infer Data>
+export type MapperAll<
+  T extends SampleUnion<Discriminant>,
+  Discriminant extends string,
+> = {
+  [K in T[Discriminant]]: T extends Model<K, infer Data, Discriminant>
     ? (input: Data) => Data
     : never;
 };

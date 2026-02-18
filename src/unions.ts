@@ -33,12 +33,19 @@ import {
  * // result: { type: 'circle', radius: 10 }
  * ```
  */
-export function map<T extends SampleUnion>(input: T): (mapper: Mapper<T>) => T {
+export function map<
+  T extends SampleUnion<Discriminant>,
+  Discriminant extends string = 'type',
+>(
+  input: T,
+  discriminant: Discriminant = 'type' as Discriminant,
+): (mapper: Mapper<T, Discriminant>) => T {
   try {
-    if (!isUnion(input)) {
+    if (!isUnion(input, discriminant)) {
       throw new Error('Data is not of type discriminated union!');
     }
-    return (mapper: Mapper<T>) => Module.map(input, mapper);
+    return (mapper: Mapper<T, Discriminant>) =>
+      Module.map(input, mapper, discriminant);
   } catch (err) {
     throw clearStackTrace(err, map);
   }
@@ -68,14 +75,19 @@ export function map<T extends SampleUnion>(input: T): (mapper: Mapper<T>) => T {
  * });
  * ```
  */
-export function mapAll<T extends SampleUnion>(
+export function mapAll<
+  T extends SampleUnion<Discriminant>,
+  Discriminant extends string = 'type',
+>(
   input: T,
-): (mapper: MapperAll<T>) => T {
+  discriminant: Discriminant = 'type' as Discriminant,
+): (mapper: MapperAll<T, Discriminant>) => T {
   try {
-    if (!isUnion(input)) {
+    if (!isUnion(input, discriminant)) {
       throw new Error('Data is not of type discriminated union!');
     }
-    return (mapper: MapperAll<T>) => Module.mapAll(input, mapper);
+    return (mapper: MapperAll<T, Discriminant>) =>
+      Module.mapAll(input, mapper, discriminant);
   } catch (err) {
     throw clearStackTrace(err, mapAll);
   }
@@ -109,15 +121,20 @@ export function mapAll<T extends SampleUnion>(
  * // area: 78.539...
  * ```
  */
-export function match<T extends SampleUnion>(
+export function match<
+  T extends SampleUnion<Discriminant>,
+  Discriminant extends string = 'type',
+>(
   input: T,
-): <U>(mapper: Matcher<T, U>) => U {
+  discriminant: Discriminant = 'type' as Discriminant,
+): <U>(mapper: Matcher<T, U, Discriminant>) => U {
   try {
-    if (!isUnion(input)) {
+    if (!isUnion(input, discriminant)) {
       throw new Error('Data is not of type discriminated union!');
     }
 
-    return <U>(matcher: Matcher<T, U>) => Module.match<T, U>(input, matcher);
+    return <U>(matcher: Matcher<T, U, Discriminant>) =>
+      Module.match<T, U, Discriminant>(input, matcher, discriminant);
   } catch (err) {
     throw clearStackTrace(err, match);
   }
@@ -149,16 +166,20 @@ export function match<T extends SampleUnion>(
  * // description: 'Some other shape'
  * ```
  */
-export function matchWithDefault<T extends SampleUnion>(
+export function matchWithDefault<
+  T extends SampleUnion<Discriminant>,
+  Discriminant extends string = 'type',
+>(
   input: T,
-): <U>(matcher: MatcherWithDefault<T, U>) => U {
+  discriminant: Discriminant = 'type' as Discriminant,
+): <U>(matcher: MatcherWithDefault<T, U, Discriminant>) => U {
   try {
-    if (!isUnion(input)) {
+    if (!isUnion(input, discriminant)) {
       throw new Error('Data is not of type discriminated union!');
     }
 
-    return <U>(matcher: MatcherWithDefault<T, U>) =>
-      Module.matchWithDefault<T, U>(input, matcher);
+    return <U>(matcher: MatcherWithDefault<T, U, Discriminant>) =>
+      Module.matchWithDefault<T, U, Discriminant>(input, matcher, discriminant);
   } catch (err) {
     throw clearStackTrace(err, matchWithDefault);
   }

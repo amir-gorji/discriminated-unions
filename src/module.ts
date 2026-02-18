@@ -21,11 +21,14 @@ import {
  * isUnion({ type: 123 });                   // false
  * ```
  */
-export function isUnion(input: any): input is SampleUnion {
+export function isUnion<Discriminant extends string>(
+  input: any,
+  discriminant: Discriminant = 'type' as Discriminant,
+): input is SampleUnion<Discriminant> {
   return (
     typeof input === 'object' &&
     input !== null &&
-    typeof input.type === 'string'
+    typeof input[discriminant] === 'string'
   );
 }
 
@@ -35,11 +38,16 @@ export function isUnion(input: any): input is SampleUnion {
  *
  * @internal Used by the public API in `unions.ts`. Not exported directly.
  */
-function match<T extends SampleUnion, Result>(
+function match<
+  T extends SampleUnion<Discriminant>,
+  Result,
+  Discriminant extends string,
+>(
   union: T,
-  matcher: Matcher<T, Result>,
+  matcher: Matcher<T, Result, Discriminant>,
+  discriminant: Discriminant = 'type' as Discriminant,
 ): Result {
-  const fn = matcher[union.type as keyof Matcher<T, Result>];
+  const fn = matcher[union[discriminant]];
   if (!fn) {
     throw new Error('Matcher incomplete!');
   }
@@ -53,11 +61,17 @@ function match<T extends SampleUnion, Result>(
  *
  * @internal Used by the public API in `unions.ts`. Not exported directly.
  */
-function matchWithDefault<T extends SampleUnion, Result>(
+function matchWithDefault<
+  T extends SampleUnion<Discriminant>,
+  Result,
+  Discriminant extends string,
+>(
   union: T,
-  matcher: MatcherWithDefault<T, Result>,
+  matcher: MatcherWithDefault<T, Result, Discriminant>,
+  discriminant: Discriminant = 'type' as Discriminant,
 ): Result {
-  const fn = matcher[union.type as keyof Matcher<T, Result>];
+  const fn =
+    matcher[union[discriminant] as keyof Matcher<T, Result, Discriminant>];
   if (!fn) {
     return matcher['Default']();
   }
@@ -71,11 +85,19 @@ function matchWithDefault<T extends SampleUnion, Result>(
  *
  * @internal Used by the public API in `unions.ts`. Not exported directly.
  */
-function map<T extends SampleUnion>(union: T, mapper: Mapper<T>): T {
-  return matchWithDefault<T, T>(union, {
-    ...mapper,
-    Default: () => union,
-  });
+function map<T extends SampleUnion<Discriminant>, Discriminant extends string>(
+  union: T,
+  mapper: Mapper<T, Discriminant>,
+  discriminant: Discriminant = 'type' as Discriminant,
+): T {
+  return matchWithDefault<T, T, Discriminant>(
+    union,
+    {
+      ...mapper,
+      Default: () => union,
+    },
+    discriminant,
+  );
 }
 
 /**
@@ -85,8 +107,15 @@ function map<T extends SampleUnion>(union: T, mapper: Mapper<T>): T {
  *
  * @internal Used by the public API in `unions.ts`. Not exported directly.
  */
-function mapAll<T extends SampleUnion>(union: T, mapper: MapperAll<T>): T {
-  return map<T>(union, mapper);
+function mapAll<
+  T extends SampleUnion<Discriminant>,
+  Discriminant extends string,
+>(
+  union: T,
+  mapper: MapperAll<T, Discriminant>,
+  discriminant: Discriminant = 'type' as Discriminant,
+): T {
+  return map<T, Discriminant>(union, mapper, discriminant);
 }
 
 /**
@@ -113,11 +142,16 @@ function mapAll<T extends SampleUnion>(union: T, mapper: MapperAll<T>): T {
  * }
  * ```
  */
-export function is<T extends { type: string }, U extends T['type']>(
+export function is<
+  T extends { [K in Discriminant]: string },
+  U extends T[Discriminant],
+  Discriminant extends string = 'type',
+>(
   union: T,
   type: U,
-): union is Extract<T, { type: U }> {
-  return union.type === type;
+  discriminant: Discriminant = 'type' as Discriminant,
+): union is Extract<T, { [K in Discriminant]: U }> {
+  return union[discriminant] === type;
 }
 
 /**

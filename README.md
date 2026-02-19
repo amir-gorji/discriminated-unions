@@ -205,7 +205,7 @@ Creates a handler factory **bound to a discriminant key**. Returns `match`, `mat
 ```ts
 import { createPipeHandlers } from 'dismatch';
 
-const shapeOps = createPipeHandlers<Shape, 'type'>('type');
+const shapeOps = createPipeHandlers<Shape>('type');
 
 // Define handlers once — get back a reusable (shape: Shape) => number
 const getArea = shapeOps.match({
@@ -335,7 +335,7 @@ isUnion(animal,    'kind');
 With `createPipeHandlers`, pass the discriminant once at creation — all returned functions inherit it:
 
 ```ts
-const animalOps = createPipeHandlers<Animal, 'kind'>('kind');
+const animalOps = createPipeHandlers<Animal>('kind');
 
 const describe = animalOps.match({
   dog:  ({ name })   => `Dog: ${name}`,
@@ -406,7 +406,7 @@ const markEmailRead = (n: Notification): Notification =>
 ### Batch Operations with `createPipeHandlers`
 
 ```ts
-const shapeOps = createPipeHandlers<Shape, 'type'>('type');
+const shapeOps = createPipeHandlers<Shape>('type');
 
 // Build the matcher once
 const getArea = shapeOps.match({
@@ -426,7 +426,7 @@ const largestIndex  = areas.indexOf(Math.max(...areas));
 ```ts
 import { pipe } from 'fp-ts/function'; // or any pipe utility
 
-const shapeOps = createPipeHandlers<Shape, 'type'>('type');
+const shapeOps = createPipeHandlers<Shape>('type');
 
 const describeArea = pipe(
   shape,

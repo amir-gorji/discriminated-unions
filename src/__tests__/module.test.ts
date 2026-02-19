@@ -144,3 +144,29 @@ describe('is with custom discriminant', () => {
     }
   });
 });
+
+describe('is — array filtering', () => {
+  const shapes: Shape[] = [
+    { type: 'circle', radius: 5 },
+    { type: 'rectangle', width: 4, height: 6 },
+    { type: 'circle', radius: 10 },
+    { type: 'rectangle', width: 2, height: 3 },
+  ];
+
+  it('should filter to only circle variants', () => {
+    const circles = shapes.filter((s) => is(s, 'circle'));
+    expect(circles).toHaveLength(2);
+    expect(circles.every((s) => s.type === 'circle')).toBe(true);
+  });
+
+  it('should filter to only rectangle variants', () => {
+    const rectangles = shapes.filter((s) => is(s, 'rectangle'));
+    expect(rectangles).toHaveLength(2);
+    expect(rectangles.every((s) => s.type === 'rectangle')).toBe(true);
+  });
+
+  it('should return empty array when no variants match', () => {
+    const result = shapes.filter((s) => is(s, 'triangle' as any));
+    expect(result).toHaveLength(0);
+  });
+});

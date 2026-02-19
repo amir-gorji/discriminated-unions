@@ -33,8 +33,8 @@ export type SampleUnion<Discriminant extends string | number | symbol> = {
  */
 export type Model<
   DiscriminantValue extends string,
-  Data,
-  Discriminant extends string | number | symbol,
+  Data = {},
+  Discriminant extends string | number | symbol = 'type',
 > = {
   [K in Discriminant]: DiscriminantValue;
 } & Data;

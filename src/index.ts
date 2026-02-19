@@ -1,7 +1,13 @@
 import { Model } from './types';
-export { match, matchWithDefault, map, mapAll } from './unions';
+export {
+  match,
+  matchWithDefault,
+  map,
+  mapAll,
+  createPipeHandlers,
+} from './unions';
 export { is, isUnion } from './module';
-export type { Model } from './types';
+export type { Model, TakeDiscriminant } from './types';
 
 /**
  * Utility type that extracts a discriminated union from an array of {@link Model} types.

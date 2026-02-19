@@ -1,43 +1,22 @@
-import { is, map, mapAll, match, matchWithDefault, UnionByArray } from '.';
+// import { pipe } from 'fp-ts/lib/function';
+import { createPipeHandlers } from '.';
 
-type A = { type: 'A'; a: number };
-type B = { type: 'B'; b: string };
-type C = { type: 'C'; c: boolean };
+type A = { kind: 'A'; a: number };
+type B = { kind: 'B'; b: string };
+type C = { kind: 'C'; c: boolean };
 
-type Model = UnionByArray<[A, B, C]>;
+type Model = A | B | C;
 
 const x: Model = {} as any;
 
-// Enforces exhaustiveness
-match(x)<boolean>({
-  A: (a) => a.a > 20,
-  B: (b) => b.b.length > 5,
-  C: (c) => c.c,
-});
+const { map, mapAll, match, matchWithDefault } =
+  createPipeHandlers<Model>('kind');
 
-matchWithDefault(x)({
-  A: (a) => {
-    console.log('A');
-  },
-  B: (b) => console.log('B'),
-  Default: () => {
-    console.log('Default functionality');
-  },
-});
-
-const updateddX = map(x)({
-  A: (a) => ({ ...a, a: 1 }),
-  B: (b) => ({ ...b, b: 'new B' }),
-  C: (c) => ({ ...c, c: false }),
-});
-
-// Enforces exhaustiveness
-const updatedX = mapAll(x)({
-  A: (a) => ({ ...a, a: 1 }),
-  B: (b) => ({ ...b, b: 'new B' }),
-  C: (c) => ({ ...c, c: false }),
-});
-
-if (is(x, 'A')) {
-  console.log(x.a);
-}
+// const result = pipe(
+//   x,
+//   match({
+//     A: (a) => a.a,
+//     B: (b) => b.b.length,
+//     C: (c) => (c.c ? 1 : 0),
+//   }),
+// );

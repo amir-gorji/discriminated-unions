@@ -1,7 +1,7 @@
 {
   "name": "dismatch",
   "description": "A lightweight discriminated unions library for TypeScript",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "main": "lib/index.js",
   "module": "lib/index.mjs",
   "types": "lib/index.d.ts",

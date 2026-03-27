@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.1] - 2026-03-27
+
+### Changed
+- Improved tree shaking for ESM builds: `/*#__PURE__*/` annotations are now preserved so downstream bundlers (webpack, Vite) can safely eliminate unused code
+- ESM output uses selective minification (identifiers + syntax only, whitespace preserved) while CJS remains fully minified
+- Added AI-powered PR review workflow
+
 ## [0.3.0] - 2026-03-27
 
 ### Added

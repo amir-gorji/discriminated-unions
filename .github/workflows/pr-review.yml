@@ -1,0 +1,120 @@
+name: PR Review
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - src/**
+      - package.json
+      - tsup.config.ts
+
+concurrency:
+  group: pr-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - name: Checkout PR branch
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build PR branch
+        run: npm run build
+
+      - name: Audit PR build
+        id: pr
+        run: |
+          echo "cjs=$(wc -c < lib/index.js | tr -d ' ')" >> $GITHUB_OUTPUT
+          echo "esm=$(wc -c < lib/index.mjs | tr -d ' ')" >> $GITHUB_OUTPUT
+
+          DTS="true"
+          [ -f lib/index.d.ts ] && [ -f lib/index.d.mts ] || DTS="false"
+          echo "dts=$DTS" >> $GITHUB_OUTPUT
+
+          node -e "const m=require('./lib/index.js');console.log(Object.keys(m).sort().join(','))" > /tmp/pr-cjs-exports.txt
+          node -e "import('./lib/index.mjs').then(m=>console.log(Object.keys(m).sort().join(',')))" > /tmp/pr-esm-exports.txt
+          echo "exports_cjs=$(cat /tmp/pr-cjs-exports.txt)" >> $GITHUB_OUTPUT
+          echo "exports_esm=$(cat /tmp/pr-esm-exports.txt)" >> $GITHUB_OUTPUT
+
+          if diff -q /tmp/pr-cjs-exports.txt /tmp/pr-esm-exports.txt > /dev/null 2>&1; then
+            echo "parity=true" >> $GITHUB_OUTPUT
+          else
+            echo "parity=false" >> $GITHUB_OUTPUT
+          fi
+
+          echo "pure=$(grep -c '#__PURE__' lib/index.mjs || echo 0)" >> $GITHUB_OUTPUT
+
+      - name: Checkout base branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.base_ref }}
+          path: .base
+
+      - name: Install and build base
+        run: npm ci && npm run build
+        working-directory: .base
+
+      - name: Audit base build
+        id: base
+        run: |
+          echo "cjs=$(wc -c < .base/lib/index.js | tr -d ' ')" >> $GITHUB_OUTPUT
+          echo "esm=$(wc -c < .base/lib/index.mjs | tr -d ' ')" >> $GITHUB_OUTPUT
+
+          node -e "const m=require('./.base/lib/index.js');console.log(Object.keys(m).sort().join(','))" > /tmp/base-cjs-exports.txt
+          node -e "import('./.base/lib/index.mjs').then(m=>console.log(Object.keys(m).sort().join(',')))" > /tmp/base-esm-exports.txt
+          echo "exports_cjs=$(cat /tmp/base-cjs-exports.txt)" >> $GITHUB_OUTPUT
+          echo "exports_esm=$(cat /tmp/base-esm-exports.txt)" >> $GITHUB_OUTPUT
+          echo "pure=$(grep -c '#__PURE__' .base/lib/index.mjs || echo 0)" >> $GITHUB_OUTPUT
+
+      - name: Review with Claude
+        uses: anthropics/claude-code-action@beta
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          model: claude-sonnet-4-6
+          max_turns: 1
+          direct_prompt: |
+            You are reviewing a PR for "dismatch", a lightweight TypeScript utility library (<1 KB).
+            Type checking and unit tests are handled separately — ignore them entirely.
+
+            ## Build Audit
+
+            Bundle size (minified bytes):
+            | Format | Base | PR |
+            |--------|------|----|
+            | CJS | ${{ steps.base.outputs.cjs }} | ${{ steps.pr.outputs.cjs }} |
+            | ESM | ${{ steps.base.outputs.esm }} | ${{ steps.pr.outputs.esm }} |
+
+            Declaration files present: ${{ steps.pr.outputs.dts }}
+            CJS/ESM export parity: ${{ steps.pr.outputs.parity }}
+
+            CJS exports — base: `${{ steps.base.outputs.exports_cjs }}` → PR: `${{ steps.pr.outputs.exports_cjs }}`
+            ESM exports — base: `${{ steps.base.outputs.exports_esm }}` → PR: `${{ steps.pr.outputs.exports_esm }}`
+
+            `/*#__PURE__*/` annotations in ESM — base: ${{ steps.base.outputs.pure }} → PR: ${{ steps.pr.outputs.pure }}
+
+            ## Rules
+
+            Only flag issues in these categories:
+            1. **Performance** — unnecessary allocations, avoidable recomputation, hot-path inefficiency in changed code
+            2. **Bundle size** — unreasonable size increase; for a utility lib every ~100 bytes matters
+            3. **Tree-shaking** — lost `/*#__PURE__*/` annotations, new module-scope side effects, patterns preventing dead-code elimination
+            4. **Dual-package** — CJS/ESM export mismatch, missing declaration files, broken `exports` map
+            5. **API surface** — accidental removal or rename of existing public exports (additions are fine)
+
+            Be extremely concise: one tight bullet per issue. If nothing to flag, output only: "No concerns." Sacrifice grammar for the sake of concisity.
+            Do NOT comment on style, naming, docs, test coverage, or type correctness.

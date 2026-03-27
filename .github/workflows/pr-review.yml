@@ -57,7 +57,7 @@ jobs:
             echo "parity=false" >> $GITHUB_OUTPUT
           fi
 
-          echo "pure=$(grep -c '#__PURE__' lib/index.mjs || echo 0)" >> $GITHUB_OUTPUT
+          echo "pure=$(grep -c '#__PURE__' lib/index.mjs || true)" >> $GITHUB_OUTPUT
 
       - name: Checkout base branch
         uses: actions/checkout@v4
@@ -79,7 +79,7 @@ jobs:
           node -e "import('./.base/lib/index.mjs').then(m=>console.log(Object.keys(m).sort().join(',')))" > /tmp/base-esm-exports.txt
           echo "exports_cjs=$(cat /tmp/base-cjs-exports.txt)" >> $GITHUB_OUTPUT
           echo "exports_esm=$(cat /tmp/base-esm-exports.txt)" >> $GITHUB_OUTPUT
-          echo "pure=$(grep -c '#__PURE__' .base/lib/index.mjs || echo 0)" >> $GITHUB_OUTPUT
+          echo "pure=$(grep -c '#__PURE__' .base/lib/index.mjs || true)" >> $GITHUB_OUTPUT
 
       - name: Review with Claude
         uses: anthropics/claude-code-action@beta

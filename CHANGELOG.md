@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.3.0] - 2026-03-27
+
+### Added
+- Payload support for all `createPipeHandlers` methods (`match`, `matchWithDefault`, `map`, `mapAll`). Provide a second type argument `<Result, Payload>` to pass extra context to every handler; each handler receives it as a second argument and the returned function becomes `(input, payload) => result`.
+- Optional `payload` parameter on the standalone `match`, `matchWithDefault`, `map`, and `mapAll` functions.
+
+### Changed
+- bundle size up to **988 bytes** (ESM, minified) due to payload feature additions
+
+### Fixed
+- `Matcher` type and all `createPipeHandlers` methods now use `[Payload] extends [never]` (non-distributive form) for the payload conditional. The distributive form previously collapsed to `never` when `Payload` was unspecified, making the returned function impossible to call.
+
 ## [0.2.1] - 2026-02-20
 
 ### Changed

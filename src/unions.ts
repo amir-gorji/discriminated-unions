@@ -65,15 +65,20 @@ function dispatch<
   T extends SampleUnion<Discriminant>,
   Result,
   Discriminant extends string | number | symbol,
+  Payload extends any = never,
 >(
   union: T,
-  handlers: Record<string, ((input: any) => Result) | undefined>,
+  handlers: Record<
+    string,
+    ((input: any, payload: Payload) => Result) | undefined
+  >,
   discriminant: Discriminant,
-  fallback?: () => Result,
+  fallback?: (payload: Payload) => Result,
+  payload?: Payload,
 ): Result {
   const fn = handlers[union[discriminant] as string];
-  if (fn) return fn(union);
-  if (fallback) return fallback();
+  if (fn) return fn(union, payload!);
+  if (fallback) return fallback(payload!);
   throw new Error('Matcher incomplete!');
 }
 
@@ -111,13 +116,24 @@ function guard<T>(
 export function map<
   T extends SampleUnion<Discriminant>,
   Discriminant extends string | number | symbol = 'type',
+  Payload extends any = never,
 >(
   input: T,
   discriminant: Discriminant = 'type' as Discriminant,
-): (mapper: Mapper<T, Discriminant>) => T {
-  return guard(input, discriminant, map, () =>
-    (mapper: Mapper<T, Discriminant>) =>
-      dispatch(input, mapper as any, discriminant, () => input),
+  payload?: Payload,
+): (mapper: Mapper<T, Discriminant, Payload>) => T {
+  return guard(
+    input,
+    discriminant,
+    map,
+    () => (mapper: Mapper<T, Discriminant, Payload>) =>
+      dispatch(
+        input,
+        mapper as Record<string, ((input: any, payload: Payload) => T) | undefined>,
+        discriminant,
+        () => input,
+        payload,
+      ),
   );
 }
 
@@ -140,13 +156,24 @@ export function map<
 export function mapAll<
   T extends SampleUnion<Discriminant>,
   Discriminant extends string | number | symbol = 'type',
+  Payload extends any = never,
 >(
   input: T,
   discriminant: Discriminant = 'type' as Discriminant,
-): (mapper: MapperAll<T, Discriminant>) => T {
-  return guard(input, discriminant, mapAll, () =>
-    (mapper: MapperAll<T, Discriminant>) =>
-      dispatch(input, mapper as any, discriminant),
+  payload?: Payload,
+): (mapper: MapperAll<T, Discriminant, Payload>) => T {
+  return guard(
+    input,
+    discriminant,
+    mapAll,
+    () => (mapper: MapperAll<T, Discriminant, Payload>) =>
+      dispatch(
+        input,
+        mapper as Record<string, (input: any, payload: Payload) => T>,
+        discriminant,
+        undefined,
+        payload,
+      ),
   );
 }
 
@@ -170,13 +197,25 @@ export function mapAll<
 export function match<
   T extends SampleUnion<Discriminant>,
   Discriminant extends string | number | symbol = 'type',
+  Payload extends any = never,
 >(
   input: T,
   discriminant: Discriminant = 'type' as Discriminant,
-): <U>(mapper: Matcher<T, U, Discriminant>) => U {
-  return guard(input, discriminant, match, () =>
-    <U>(matcher: Matcher<T, U, Discriminant>) =>
-      dispatch<T, U, Discriminant>(input, matcher as any, discriminant),
+  payload?: Payload,
+): <Result>(mapper: Matcher<T, Result, Discriminant, Payload>) => Result {
+  return guard(
+    input,
+    discriminant,
+    match,
+    () =>
+      <Result>(matcher: Matcher<T, Result, Discriminant, Payload>) =>
+        dispatch<T, Result, Discriminant, Payload>(
+          input,
+          matcher as unknown as Record<string, (input: any, payload: Payload) => Result>,
+          discriminant,
+          undefined,
+          payload,
+        ),
   );
 }
 
@@ -199,18 +238,25 @@ export function match<
 export function matchWithDefault<
   T extends SampleUnion<Discriminant>,
   Discriminant extends string | number | symbol = 'type',
+  Payload extends any = never,
 >(
   input: T,
   discriminant: Discriminant = 'type' as Discriminant,
-): <U>(matcher: MatcherWithDefault<T, U, Discriminant>) => U {
-  return guard(input, discriminant, matchWithDefault, () =>
-    <U>(matcher: MatcherWithDefault<T, U, Discriminant>) =>
-      dispatch<T, U, Discriminant>(
-        input,
-        matcher as any,
-        discriminant,
-        matcher.Default,
-      ),
+  payload?: Payload,
+): <U>(matcher: MatcherWithDefault<T, U, Discriminant, Payload>) => U {
+  return guard(
+    input,
+    discriminant,
+    matchWithDefault,
+    () =>
+      <U>(matcher: MatcherWithDefault<T, U, Discriminant, Payload>) =>
+        dispatch<T, U, Discriminant, Payload>(
+          input,
+          matcher as unknown as Record<string, (input: any, payload: Payload) => U>,
+          discriminant,
+          matcher.Default,
+          payload,
+        ),
   );
 }
 
@@ -243,16 +289,48 @@ export function createPipeHandlers<
   Discriminant extends TakeDiscriminant<T> = TakeDiscriminant<T>,
 >(discriminant: Discriminant) {
   return {
-    match: <U>(handlers: Matcher<T, U, Discriminant>) =>
-      (input: T): U => match(input, discriminant)(handlers),
+    match:
+      <U, Payload extends any = never>(
+        handlers: Matcher<T, U, Discriminant, Payload>,
+      ) =>
+      (
+        ...inputs: [Payload] extends [never]
+          ? [input: T]
+          : [input: T, payload: Payload]
+      ): U =>
+        match(inputs[0], discriminant, inputs[1])(handlers),
 
-    matchWithDefault: <U>(handlers: MatcherWithDefault<T, U, Discriminant>) =>
-      (input: T): U => matchWithDefault(input, discriminant)(handlers),
+    matchWithDefault:
+      <U, Payload extends any = never>(
+        handlers: MatcherWithDefault<T, U, Discriminant, Payload>,
+      ) =>
+      (
+        ...inputs: [Payload] extends [never]
+          ? [input: T]
+          : [input: T, payload: Payload]
+      ): U =>
+        matchWithDefault(inputs[0], discriminant, inputs[1])(handlers),
 
-    map: (handlers: Mapper<T, Discriminant>) =>
-      (input: T): T => map(input, discriminant)(handlers),
+    map:
+      <Payload extends any = never>(
+        handlers: Mapper<T, Discriminant, Payload>,
+      ) =>
+      (
+        ...inputs: [Payload] extends [never]
+          ? [input: T]
+          : [input: T, payload: Payload]
+      ): T =>
+        map(inputs[0], discriminant, inputs[1])(handlers),
 
-    mapAll: (handlers: MapperAll<T, Discriminant>) =>
-      (input: T): T => mapAll(input, discriminant)(handlers),
+    mapAll:
+      <Payload extends any = never>(
+        handlers: MapperAll<T, Discriminant, Payload>,
+      ) =>
+      (
+        ...inputs: [Payload] extends [never]
+          ? [input: T]
+          : [input: T, payload: Payload]
+      ): T =>
+        mapAll(inputs[0], discriminant, inputs[1])(handlers),
   };
 }

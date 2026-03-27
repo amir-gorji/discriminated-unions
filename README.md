@@ -4,7 +4,7 @@
 [![license](https://img.shields.io/npm/l/dismatch)](./LICENSE)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue)](https://www.typescriptlang.org/)
 
-Type-safe pattern matching for TypeScript discriminated unions. Zero dependencies. Full type inference. Exhaustiveness enforced at compile time.
+Type-safe pattern matching for TypeScript discriminated unions. Zero dependencies. Full type inference. Exhaustiveness enforced at compile time. ~988 B minified ESM.
 
 ```ts
 const area = match(shape)({
@@ -232,6 +232,32 @@ const result = pipe(
   }),
 );
 ```
+
+**Payload** — pass extra context to every handler by supplying a second type argument. Each handler receives the payload as its second argument, and the returned function accepts `(input, payload)`:
+
+```ts
+type Dimensions = { depth: number };
+
+const shapeOps = createPipeHandlers<Shape>('type');
+
+const calculateVolume = shapeOps.match<number, Dimensions>({
+  circle:    ({ radius },        { depth }) => Math.PI * radius ** 2 * depth,
+  rectangle: ({ width, height }, { depth }) => width * height * depth,
+  triangle:  ({ base, height },  { depth }) => (base * height * depth) / 2,
+});
+
+calculateVolume(circle,    { depth: 10 }); // 785.4…
+calculateVolume(rectangle, { depth: 5  }); // 120
+
+// Works across all four methods:
+const scaleShape = shapeOps.map<Dimensions>({
+  circle: ({ type, radius }, { depth }) => ({ type, radius: radius * depth }),
+});
+
+scaleShape(circle, { depth: 2 }); // { type: 'circle', radius: 10 }
+```
+
+When the payload type is omitted, handlers take only the variant data (no second argument) — fully backward-compatible with all existing usage.
 
 Regular `match(value)(handlers)` is great for one-off decisions. `createPipeHandlers` shines when you need to **reuse the same handler set** across many values or **compose** operations in a pipeline:
 

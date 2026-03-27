@@ -61,9 +61,14 @@ export type Matcher<
   T extends SampleUnion<Discriminant>,
   Result,
   Discriminant extends string | number | symbol,
+  Payload extends any = never,
 > = {
   [K in T[Discriminant]]: T extends Model<K, infer Data, Discriminant>
-    ? (input: Data) => Result
+    ? (
+        ...inputs: [Payload] extends [never]
+          ? [input: Data]
+          : [input: Data, payload: Payload]
+      ) => Result
     : never;
 };
 
@@ -89,7 +94,10 @@ export type MatcherWithDefault<
   T extends SampleUnion<Discriminant>,
   Result,
   Discriminant extends string | number | symbol,
-> = Partial<Matcher<T, Result, Discriminant>> & { Default: () => Result };
+  Payload extends any = never,
+> = Partial<Matcher<T, Result, Discriminant, Payload>> & {
+  Default: (payload: Payload) => Result;
+};
 
 /**
  * Partial transformation map for discriminated unions.
@@ -111,9 +119,10 @@ export type MatcherWithDefault<
 export type Mapper<
   T extends SampleUnion<Discriminant>,
   Discriminant extends string | number | symbol,
+  Payload extends any = never,
 > = {
   [K in T[Discriminant]]?: T extends Model<K, infer Data, Discriminant>
-    ? (input: Data) => Data
+    ? (input: Data, payload: Payload) => Data
     : never;
 };
 
@@ -137,9 +146,10 @@ export type Mapper<
 export type MapperAll<
   T extends SampleUnion<Discriminant>,
   Discriminant extends string | number | symbol,
+  Payload extends any = never,
 > = {
   [K in T[Discriminant]]: T extends Model<K, infer Data, Discriminant>
-    ? (input: Data) => Data
+    ? (input: Data, payload: Payload) => Data
     : never;
 };
 

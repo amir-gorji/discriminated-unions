@@ -10,18 +10,18 @@ Type-safe discriminated unions for TypeScript. Define once, get constructors, ty
 import { createUnion, type InferUnion } from 'dismatch';
 
 const Shape = createUnion('type', {
-  circle:    (radius: number)                => ({ radius }),
+  circle: (radius: number) => ({ radius }),
   rectangle: (width: number, height: number) => ({ width, height }),
 });
 
 type Shape = InferUnion<typeof Shape>;
 
-Shape.circle(5);                // { type: 'circle', radius: 5 }
-Shape.is.circle(shape);        // type guard → narrows to circle
-Shape.isKnown(apiResponse);    // runtime check against declared variants
+Shape.circle(5); // { type: 'circle', radius: 5 }
+Shape.is.circle(shape); // type guard → narrows to circle
+Shape.isKnown(apiResponse); // runtime check against declared variants
 
 const area = Shape.match({
-  circle:    ({ radius })        => Math.PI * radius ** 2,
+  circle: ({ radius }) => Math.PI * radius ** 2,
   rectangle: ({ width, height }) => width * height,
 });
 
@@ -33,6 +33,7 @@ area(Shape.circle(5)); // 78.54
 ## Table of Contents
 
 - [Install](#install)
+- [Comparison](#comparison)
 - [Quick Start](#quick-start)
   - [Define a union](#1-define-a-union)
   - [Construct values](#2-construct-values)
@@ -63,6 +64,27 @@ npm install dismatch
 
 ---
 
+## Comparison
+
+`dismatch` is purpose-built only for discriminated unions in TypeScript.
+
+| Capability                         | dismatch                | ts-pattern | unionize       | @effect/match     |
+| ---------------------------------- | ----------------------- | ---------- | -------------- | ----------------- |
+| Bundle size                        | **~1.4 kB**             | ~2 kB      | unclear        | large (ecosystem) |
+| Zero dependencies                  | Yes                     | Yes        | Yes            | No                |
+| Exhaustive matching (compile time) | Yes                     | Yes        | Yes            | Yes               |
+| Schema-aware runtime validation    | **Yes**                 | No         | No             | No                |
+| Partial transforms (`map`)         | **Yes**                 | No         | No             | No                |
+| Clean stack traces                 | **Yes**                 | No         | No             | No                |
+| Payload to handlers                | **Yes**                 | No         | No             | No                |
+| Single-schema union toolkit        | **Yes** (`createUnion`) | No         | Yes (inactive) | No                |
+| Maintenance                        | Active                  | Active     | Inactive       | Active            |
+| Beyond discriminated unions        | No                      | Yes        | No             | Yes               |
+
+`dismatch` is the complete discriminated union toolkit for TypeScript, in one tiny package.
+
+---
+
 ## Quick Start
 
 ### 1. Define a union
@@ -73,9 +95,9 @@ npm install dismatch
 import { createUnion, type InferUnion } from 'dismatch';
 
 const Result = createUnion('type', {
-  ok:      (data: string)    => ({ data }),
-  error:   (message: string) => ({ message }),
-  loading: ()                => ({}),
+  ok: (data: string) => ({ data }),
+  error: (message: string) => ({ message }),
+  loading: () => ({}),
 });
 
 type Result = InferUnion<typeof Result>;
@@ -85,9 +107,9 @@ type Result = InferUnion<typeof Result>;
 ### 2. Construct values
 
 ```ts
-const r = Result.ok('hello');     // { type: 'ok', data: 'hello' }
-const e = Result.error('fail');   // { type: 'error', message: 'fail' }
-const l = Result.loading();       // { type: 'loading' }
+const r = Result.ok('hello'); // { type: 'ok', data: 'hello' }
+const e = Result.error('fail'); // { type: 'error', message: 'fail' }
+const l = Result.loading(); // { type: 'loading' }
 ```
 
 ### 3. Type guards
@@ -105,8 +127,8 @@ const errors = results.filter(Result.is.error);
 `isKnown` checks if a value is any declared variant — useful at system boundaries:
 
 ```ts
-Result.isKnown(apiResponse);              // true if type is 'ok' | 'error' | 'loading'
-Result.isKnown({ type: 'unknown' });      // false
+Result.isKnown(apiResponse); // true if type is 'ok' | 'error' | 'loading'
+Result.isKnown({ type: 'unknown' }); // false
 ```
 
 ### 4. Pattern matching
@@ -116,17 +138,17 @@ All four matchers are bound to the factory and curried **handlers-first** — de
 ```ts
 // Exhaustive — every variant must have a handler
 const label = Result.match({
-  ok:      ({ data })    => `Data: ${data}`,
-  error:   ({ message }) => `Error: ${message}`,
-  loading: ()            => 'Loading...',
+  ok: ({ data }) => `Data: ${data}`,
+  error: ({ message }) => `Error: ${message}`,
+  loading: () => 'Loading...',
 });
 
 label(r); // 'Data: hello'
 
 // Partial — handle what you need, Default catches the rest
 const banner = Result.matchWithDefault({
-  error:   ({ message }) => `Something went wrong: ${message}`,
-  Default: ()            => 'All good',
+  error: ({ message }) => `Something went wrong: ${message}`,
+  Default: () => 'All good',
 });
 
 // Transform — modify specific variants, rest pass through unchanged
@@ -137,17 +159,17 @@ const cleared = Result.map({
 
 // Exhaustive transform — every variant gets a handler
 const normalized = Result.mapAll({
-  ok:      ({ data })    => ({ data: data.trim() }),
-  error:   ({ message }) => ({ message: message.trim() }),
-  loading: ()            => ({}),
+  ok: ({ data }) => ({ data: data.trim() }),
+  error: ({ message }) => ({ message: message.trim() }),
+  loading: () => ({}),
 });
 ```
 
 ### 5. Metadata
 
 ```ts
-Result.variants;      // readonly ['ok', 'error', 'loading']
-Result.discriminant;  // 'type'
+Result.variants; // readonly ['ok', 'error', 'loading']
+Result.discriminant; // 'type'
 ```
 
 ---
@@ -168,7 +190,7 @@ type Shape =
   | { type: 'rectangle'; width: number; height: number };
 
 const area = match(shape)({
-  circle:    ({ radius })        => Math.PI * radius ** 2,
+  circle: ({ radius }) => Math.PI * radius ** 2,
   rectangle: ({ width, height }) => width * height,
 });
 ```
@@ -181,8 +203,8 @@ Partial matching with a `Default` fallback.
 import { matchWithDefault } from 'dismatch';
 
 const banner = matchWithDefault(result)({
-  error:   ({ message }) => `Error: ${message}`,
-  Default: ()            => 'All good',
+  error: ({ message }) => `Error: ${message}`,
+  Default: () => 'All good',
 });
 ```
 
@@ -200,8 +222,11 @@ const bigger = map(shape)({
 
 // Every variant must be handled
 const normalized = mapAll(shape)({
-  circle:    ({ radius })        => ({ radius: Math.abs(radius) }),
-  rectangle: ({ width, height }) => ({ width: Math.abs(width), height: Math.abs(height) }),
+  circle: ({ radius }) => ({ radius: Math.abs(radius) }),
+  rectangle: ({ width, height }) => ({
+    width: Math.abs(width),
+    height: Math.abs(height),
+  }),
 });
 ```
 
@@ -227,7 +252,7 @@ Runtime check that a value is a valid discriminated union.
 import { isUnion } from 'dismatch';
 
 isUnion({ type: 'ok', data: 42 }); // true
-isUnion(null);                      // false
+isUnion(null); // false
 isUnion({ kind: 'click' }, 'kind'); // true — custom discriminant
 ```
 
@@ -241,7 +266,7 @@ import { createPipeHandlers } from 'dismatch';
 const shapeOps = createPipeHandlers<Shape>('type');
 
 const getArea = shapeOps.match({
-  circle:    ({ radius })        => Math.PI * radius ** 2,
+  circle: ({ radius }) => Math.PI * radius ** 2,
   rectangle: ({ width, height }) => width * height,
 });
 
@@ -249,18 +274,18 @@ shapes.map(getArea); // no wrapper lambdas
 
 // Payload support — pass extra context to every handler
 const volume = shapeOps.match<number, { depth: number }>({
-  circle:    ({ radius },        { depth }) => Math.PI * radius ** 2 * depth,
+  circle: ({ radius }, { depth }) => Math.PI * radius ** 2 * depth,
   rectangle: ({ width, height }, { depth }) => width * height * depth,
 });
 
 volume(shape, { depth: 10 });
 ```
 
-| Use case | Prefer |
-|---|---|
-| One-off match on a single value | `match(value)(handlers)` |
-| Reuse handlers across many values / arrays | `createPipeHandlers` |
-| Compose in a `pipe` or pass as callback | `createPipeHandlers` |
+| Use case                                   | Prefer                   |
+| ------------------------------------------ | ------------------------ |
+| One-off match on a single value            | `match(value)(handlers)` |
+| Reuse handlers across many values / arrays | `createPipeHandlers`     |
+| Compose in a `pipe` or pass as callback    | `createPipeHandlers`     |
 
 ---
 
@@ -289,9 +314,7 @@ type D = TakeDiscriminant<Shape>; // 'type'
 All functions default to `'type'` but accept any discriminant key:
 
 ```ts
-type Animal =
-  | { kind: 'dog'; name: string }
-  | { kind: 'cat'; lives: number };
+type Animal = { kind: 'dog'; name: string } | { kind: 'cat'; lives: number };
 
 match(animal, 'kind')({ dog: ({ name }) => name, cat: () => 'meow' });
 is(animal, 'dog', 'kind');
@@ -333,7 +356,7 @@ const reduce = (state: number, action: Action): number =>
   match(action)({
     increment: ({ by }) => state + by,
     decrement: ({ by }) => state - by,
-    reset:     ()       => 0,
+    reset: () => 0,
   });
 ```
 
@@ -347,7 +370,7 @@ const shapeOps = createPipeHandlers<Shape>('type');
 const result = pipe(
   shape,
   shapeOps.match({
-    circle:    () => 'round',
+    circle: () => 'round',
     rectangle: () => 'flat',
   }),
 );

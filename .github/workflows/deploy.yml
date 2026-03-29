@@ -1,4 +1,4 @@
-name: Sample type check CI workflow
+name: CI
 
 on:
   push:
@@ -21,3 +21,7 @@ jobs:
       - run: npm ci
       - run: npm run ts:ci
       - run: npm run test
+      - run: npm run build
+      - run: git diff --exit-code -- lib
+      - run: npm run test:package
+      - run: npm run ts:package

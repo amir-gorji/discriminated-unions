@@ -14,14 +14,13 @@
  */
 
 import { match, matchWithDefault, map, mapAll, is, createPipeHandlers } from 'dismatch';
-import type { Model } from 'dismatch';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
 type Notification =
-  | Model<'email', { from: string; subject: string; read: boolean; starred: boolean }>
-  | Model<'sms',   { from: string; body: string;    read: boolean }>
-  | Model<'push',  { app: string;  title: string;   read: boolean; urgent: boolean }>;
+  | { type: 'email'; from: string; subject: string; read: boolean; starred: boolean }
+  | { type: 'sms';   from: string; body: string;    read: boolean }
+  | { type: 'push';  app: string;  title: string;   read: boolean; urgent: boolean };
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 

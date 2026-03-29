@@ -93,31 +93,31 @@ describe('match', () => {
 
   it('should throw for null input', () => {
     expect(() => match(null as any)).toThrow(
-      'Data is not of type discriminated union!',
+      'Not a union',
     );
   });
 
   it('should throw for undefined input', () => {
     expect(() => match(undefined as any)).toThrow(
-      'Data is not of type discriminated union!',
+      'Not a union',
     );
   });
 
   it('should throw for primitive string input', () => {
     expect(() => match('hello' as any)).toThrow(
-      'Data is not of type discriminated union!',
+      'Not a union',
     );
   });
 
   it('should throw for primitive number input', () => {
     expect(() => match(42 as any)).toThrow(
-      'Data is not of type discriminated union!',
+      'Not a union',
     );
   });
 
   it('should throw for object without type property', () => {
     expect(() => match({} as any)).toThrow(
-      'Data is not of type discriminated union!',
+      'Not a union',
     );
   });
 });
@@ -158,19 +158,19 @@ describe('matchWithDefault', () => {
 
   it('should throw for null input', () => {
     expect(() => matchWithDefault(null as any)).toThrow(
-      'Data is not of type discriminated union!',
+      'Not a union',
     );
   });
 
   it('should throw for undefined input', () => {
     expect(() => matchWithDefault(undefined as any)).toThrow(
-      'Data is not of type discriminated union!',
+      'Not a union',
     );
   });
 
   it('should throw for object without type property', () => {
     expect(() => matchWithDefault({} as any)).toThrow(
-      'Data is not of type discriminated union!',
+      'Not a union',
     );
   });
 });
@@ -178,14 +178,14 @@ describe('matchWithDefault', () => {
 describe('map', () => {
   it('should transform matched variant', () => {
     const result = map(circle)({
-      circle: ({ type, radius }) => ({ type, radius: radius * 2 }),
+      circle: ({ radius }) => ({ radius: radius * 2 }),
     });
     expect(result).toEqual({ type: 'circle', radius: 10 });
   });
 
   it('should return original unchanged for unmatched variants', () => {
     const result = map(rectangle)({
-      circle: ({ type, radius }) => ({ type, radius: radius * 2 }),
+      circle: ({ radius }) => ({ radius: radius * 2 }),
     });
     expect(result).toEqual({ type: 'rectangle', width: 4, height: 6 });
     expect(result).toBe(rectangle); // same reference (identity)
@@ -193,8 +193,7 @@ describe('map', () => {
 
   it('should handle partial mapping with only one handler', () => {
     const result = map(triangle)({
-      triangle: ({ type, base, height }) => ({
-        type,
+      triangle: ({ base, height }) => ({
         base: base * 3,
         height: height * 3,
       }),
@@ -207,21 +206,32 @@ describe('map', () => {
     expect(result).toBe(circle);
   });
 
+  it('should preserve the original discriminant when a mapper returns one', () => {
+    const result = map(circle)({
+      circle: (() =>
+        ({
+          type: 'triangle',
+          radius: 10,
+        })) as any,
+    } as any);
+    expect(result).toEqual({ type: 'circle', radius: 10 });
+  });
+
   it('should throw for null input', () => {
     expect(() => map(null as any)).toThrow(
-      'Data is not of type discriminated union!',
+      'Not a union',
     );
   });
 
   it('should throw for undefined input', () => {
     expect(() => map(undefined as any)).toThrow(
-      'Data is not of type discriminated union!',
+      'Not a union',
     );
   });
 
   it('should throw for object without type property', () => {
     expect(() => map({} as any)).toThrow(
-      'Data is not of type discriminated union!',
+      'Not a union',
     );
   });
 });
@@ -229,14 +239,12 @@ describe('map', () => {
 describe('mapAll', () => {
   it('should transform all variants with their handlers', () => {
     const result = mapAll(circle)({
-      circle: ({ type, radius }) => ({ type, radius: radius * 2 }),
-      rectangle: ({ type, width, height }) => ({
-        type,
+      circle: ({ radius }) => ({ radius: radius * 2 }),
+      rectangle: ({ width, height }) => ({
         width: width * 2,
         height: height * 2,
       }),
-      triangle: ({ type, base, height }) => ({
-        type,
+      triangle: ({ base, height }) => ({
         base: base * 2,
         height: height * 2,
       }),
@@ -246,14 +254,12 @@ describe('mapAll', () => {
 
   it('should transform rectangle variant correctly', () => {
     const result = mapAll(rectangle)({
-      circle: ({ type, radius }) => ({ type, radius: radius * 2 }),
-      rectangle: ({ type, width, height }) => ({
-        type,
+      circle: ({ radius }) => ({ radius: radius * 2 }),
+      rectangle: ({ width, height }) => ({
         width: width + 1,
         height: height + 1,
       }),
-      triangle: ({ type, base, height }) => ({
-        type,
+      triangle: ({ base, height }) => ({
         base: base * 2,
         height: height * 2,
       }),
@@ -263,10 +269,9 @@ describe('mapAll', () => {
 
   it('should transform triangle variant correctly', () => {
     const result = mapAll(triangle)({
-      circle: ({ type, radius }) => ({ type, radius }),
-      rectangle: ({ type, width, height }) => ({ type, width, height }),
-      triangle: ({ type, base, height }) => ({
-        type,
+      circle: ({ radius }) => ({ radius }),
+      rectangle: ({ width, height }) => ({ width, height }),
+      triangle: ({ base, height }) => ({
         base: base * 10,
         height: height * 10,
       }),
@@ -276,20 +281,31 @@ describe('mapAll', () => {
 
   it('should throw for null input', () => {
     expect(() => mapAll(null as any)).toThrow(
-      'Data is not of type discriminated union!',
+      'Not a union',
     );
   });
 
   it('should throw for undefined input', () => {
     expect(() => mapAll(undefined as any)).toThrow(
-      'Data is not of type discriminated union!',
+      'Not a union',
     );
   });
 
   it('should throw when a handler is missing at runtime', () => {
     expect(() =>
       mapAll(rectangle)({ circle: (s) => s } as any),
-    ).toThrow('Matcher incomplete!');
+    ).toThrow('No handler');
+  });
+
+  it('should preserve the original discriminant when a mapper returns one', () => {
+    const result = mapAll(circle)({
+      circle: (() =>
+        ({
+          type: 'triangle',
+          radius: 10,
+        })) as any,
+    } as any);
+    expect(result).toEqual({ type: 'circle', radius: 10 });
   });
 });
 
@@ -322,7 +338,7 @@ describe('match with custom discriminant', () => {
 
   it('should throw for invalid input with custom discriminant', () => {
     expect(() => match({ type: 'dog' } as any, 'kind')).toThrow(
-      'Data is not of type discriminated union!',
+      'Not a union',
     );
   });
 });
@@ -357,7 +373,7 @@ describe('map with custom discriminant', () => {
       cat,
       'kind',
     )({
-      cat: ({ kind, lives }) => ({ kind, lives: lives - 1 }),
+      cat: ({ lives }) => ({ lives: lives - 1 }),
     });
     expect(result).toEqual({ kind: 'cat', lives: 8 });
   });
@@ -367,7 +383,7 @@ describe('map with custom discriminant', () => {
       dog,
       'kind',
     )({
-      cat: ({ kind, lives }) => ({ kind, lives: lives - 1 }),
+      cat: ({ lives }) => ({ lives: lives - 1 }),
     });
     expect(result).toBe(dog);
   });
@@ -379,9 +395,9 @@ describe('mapAll with custom discriminant', () => {
       dog,
       'kind',
     )({
-      dog: ({ kind, name }) => ({ kind, name: name.toUpperCase() }),
-      cat: ({ kind, lives }) => ({ kind, lives: lives + 1 }),
-      bird: ({ kind, canFly }) => ({ kind, canFly: !canFly }),
+      dog: ({ name }) => ({ name: name.toUpperCase() }),
+      cat: ({ lives }) => ({ lives: lives + 1 }),
+      bird: ({ canFly }) => ({ canFly: !canFly }),
     });
     expect(result).toEqual({ kind: 'dog', name: 'REX' });
   });
@@ -422,7 +438,7 @@ describe('createPipeHandlers', () => {
     it('should throw for invalid input', () => {
       const fn = shapeOps.match(shapeMatcher);
       expect(() => fn(null as any)).toThrow(
-        'Data is not of type discriminated union!',
+        'Not a union',
       );
     });
   });
@@ -447,7 +463,7 @@ describe('createPipeHandlers', () => {
     it('should throw for invalid input', () => {
       const fn = shapeOps.matchWithDefault({ Default: () => 'x' });
       expect(() => fn(null as any)).toThrow(
-        'Data is not of type discriminated union!',
+        'Not a union',
       );
     });
   });
@@ -455,14 +471,14 @@ describe('createPipeHandlers', () => {
   describe('map', () => {
     it('should transform matched variant', () => {
       const fn = shapeOps.map({
-        circle: ({ type, radius }) => ({ type, radius: radius * 2 }),
+        circle: ({ radius }) => ({ radius: radius * 2 }),
       });
       expect(fn(circle)).toEqual({ type: 'circle', radius: 10 });
     });
 
     it('should pass through unmatched variant (same reference)', () => {
       const fn = shapeOps.map({
-        circle: ({ type, radius }) => ({ type, radius: radius * 2 }),
+        circle: ({ radius }) => ({ radius: radius * 2 }),
       });
       expect(fn(rectangle)).toBe(rectangle);
     });
@@ -470,7 +486,7 @@ describe('createPipeHandlers', () => {
     it('should throw for invalid input', () => {
       const fn = shapeOps.map({});
       expect(() => fn(null as any)).toThrow(
-        'Data is not of type discriminated union!',
+        'Not a union',
       );
     });
   });
@@ -478,14 +494,12 @@ describe('createPipeHandlers', () => {
   describe('mapAll', () => {
     it('should transform all variants correctly', () => {
       const fn = shapeOps.mapAll({
-        circle: ({ type, radius }) => ({ type, radius: radius * 2 }),
-        rectangle: ({ type, width, height }) => ({
-          type,
+        circle: ({ radius }) => ({ radius: radius * 2 }),
+        rectangle: ({ width, height }) => ({
           width: width * 2,
           height: height * 2,
         }),
-        triangle: ({ type, base, height }) => ({
-          type,
+        triangle: ({ base, height }) => ({
           base: base * 2,
           height: height * 2,
         }),
@@ -506,7 +520,7 @@ describe('createPipeHandlers', () => {
         triangle: (s) => s,
       });
       expect(() => fn(null as any)).toThrow(
-        'Data is not of type discriminated union!',
+        'Not a union',
       );
     });
   });
@@ -534,7 +548,7 @@ describe('createPipeHandlers', () => {
 
     it('map: should transform and pass through with kind discriminant', () => {
       const fn = animalOps.map({
-        cat: ({ kind, lives }) => ({ kind, lives: lives - 1 }),
+        cat: ({ lives }) => ({ lives: lives - 1 }),
       });
       expect(fn(cat)).toEqual({ kind: 'cat', lives: 8 });
       expect(fn(dog)).toBe(dog);
@@ -542,9 +556,9 @@ describe('createPipeHandlers', () => {
 
     it('mapAll: should transform all variants with kind discriminant', () => {
       const fn = animalOps.mapAll({
-        dog: ({ kind, name }) => ({ kind, name: name.toUpperCase() }),
-        cat: ({ kind, lives }) => ({ kind, lives: lives + 1 }),
-        bird: ({ kind, canFly }) => ({ kind, canFly: !canFly }),
+        dog: ({ name }) => ({ name: name.toUpperCase() }),
+        cat: ({ lives }) => ({ lives: lives + 1 }),
+        bird: ({ canFly }) => ({ canFly: !canFly }),
       });
       expect(fn(dog)).toEqual({ kind: 'dog', name: 'REX' });
       expect(fn(cat)).toEqual({ kind: 'cat', lives: 10 });

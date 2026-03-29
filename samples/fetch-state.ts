@@ -5,7 +5,7 @@
  * with four states: idle → loading → success | failure.
  *
  * Demonstrates:
- *   - Defining a parameterised state union with Model<>
+ *   - Defining a parameterised state union with plain TypeScript types
  *   - match() for exhaustive view rendering / status derivation
  *   - map() for state transitions that only touch one variant
  *   - matchWithDefault() for "I only care about this one case"
@@ -19,7 +19,6 @@ import {
   createPipeHandlers,
   isUnion,
 } from 'dismatch';
-import type { Model } from 'dismatch';
 
 // ── Domain types ──────────────────────────────────────────────────────────────
 
@@ -34,20 +33,20 @@ interface User {
  * result from one being re-fetched in the background.
  */
 type FetchState<T> =
-  | Model<'idle'>
-  | Model<'loading'>
-  | Model<'success', { data: T; stale: boolean }>
-  | Model<'failure', { error: string; retries: number }>;
+  | { type: 'idle' }
+  | { type: 'loading' }
+  | { type: 'success'; data: T; stale: boolean }
+  | { type: 'failure'; error: string; retries: number };
 
 // ── State transitions (pure functions, no side effects) ───────────────────────
 
 /** Start a fresh fetch — always moves to loading. */
 function startFetch<T>(state: FetchState<T>): FetchState<T> {
   return match(state)({
-    idle:    () => ({ type: 'loading' } as const),
-    loading: () => state,                                    // already in-flight
-    success: ({ data }) => ({ type: 'success', data, stale: true } as const), // background refresh
-    failure: () => ({ type: 'loading' } as const),
+    idle: () => ({ type: 'loading' }),
+    loading: () => state, // already in-flight
+    success: ({ data }) => ({ type: 'success', data, stale: true }), // background refresh
+    failure: () => ({ type: 'loading' }),
   });
 }
 
@@ -58,10 +57,12 @@ function onSuccess<T>(data: T): FetchState<T> {
 
 /** Record a failure, incrementing the retry counter. */
 function onFailure<T>(state: FetchState<T>, error: string): FetchState<T> {
-  // map() handler parameters are typed as the variant's Data (without the discriminant key).
-  // Include type: 'failure' as const in the return to reconstruct the full variant.
+  // map() handlers return payload fields only; the discriminant is preserved.
   return map(state)({
-    failure: ({ retries }) => ({ type: 'failure' as const, error, retries: retries + 1 }),
+    failure: ({ retries }) => ({
+      error,
+      retries: retries + 1,
+    }),
   });
 }
 
@@ -70,7 +71,7 @@ function onFailure<T>(state: FetchState<T>, error: string): FetchState<T> {
 /** Is there an in-flight request (including stale background refresh)? */
 function isLoading<T>(state: FetchState<T>): boolean {
   return match(state)({
-    idle:    () => false,
+    idle: () => false,
     loading: () => true,
     success: ({ stale }) => stale,
     failure: () => false,
@@ -88,9 +89,9 @@ function dataOr<T>(state: FetchState<T>, fallback: T): T {
 /** Human-readable status for logging / UI headers. */
 function statusLabel<T>(state: FetchState<T>): string {
   return match(state)({
-    idle:    () => 'Not started',
+    idle: () => 'Not started',
     loading: () => 'Loading…',
-    success: ({ stale }) => stale ? 'Refreshing…' : 'Up to date',
+    success: ({ stale }) => (stale ? 'Refreshing…' : 'Up to date'),
     failure: ({ error, retries }) => `Failed (attempt ${retries}): ${error}`,
   });
 }
@@ -105,14 +106,14 @@ function statusLabel<T>(state: FetchState<T>): string {
 const userFetchOps = createPipeHandlers<FetchState<User[]>, 'type'>('type');
 
 const getUserCount = userFetchOps.match({
-  idle:    () => 0,
+  idle: () => 0,
   loading: () => 0,
   success: ({ data }) => data.length,
   failure: () => 0,
 });
 
 const getStatusMessage = userFetchOps.match({
-  idle:    () => 'Waiting for data',
+  idle: () => 'Waiting for data',
   loading: () => 'Fetching users…',
   success: ({ data, stale }) =>
     `${data.length} users loaded${stale ? ' (refreshing)' : ''}`,
@@ -123,24 +124,24 @@ const getStatusMessage = userFetchOps.match({
 
 let state: FetchState<User[]> = { type: 'idle' };
 
-console.log(statusLabel(state));            // 'Not started'
-console.log(isLoading(state));              // false
+console.log(statusLabel(state)); // 'Not started'
+console.log(isLoading(state)); // false
 
 state = startFetch(state);
-console.log(statusLabel(state));            // 'Loading…'
-console.log(isLoading(state));              // true
+console.log(statusLabel(state)); // 'Loading…'
+console.log(isLoading(state)); // true
 
 state = onSuccess<User[]>([
   { id: 1, name: 'Alice', email: 'alice@example.com' },
-  { id: 2, name: 'Bob',   email: 'bob@example.com' },
+  { id: 2, name: 'Bob', email: 'bob@example.com' },
 ]);
-console.log(statusLabel(state));            // 'Up to date'
-console.log(getUserCount(state));           // 2
-console.log(getStatusMessage(state));       // '2 users loaded'
+console.log(statusLabel(state)); // 'Up to date'
+console.log(getUserCount(state)); // 2
+console.log(getStatusMessage(state)); // '2 users loaded'
 
-state = startFetch(state);                  // background refresh → stale
-console.log(isLoading(state));              // true (stale = true)
-console.log(getStatusMessage(state));       // '2 users loaded (refreshing)'
+state = startFetch(state); // background refresh → stale
+console.log(isLoading(state)); // true (stale = true)
+console.log(getStatusMessage(state)); // '2 users loaded (refreshing)'
 
 // ── Runtime boundary: validate external data before matching ──────────────────
 

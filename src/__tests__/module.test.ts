@@ -55,6 +55,12 @@ describe('isUnion', () => {
     expect(isUnion([])).toBe(false);
   });
 
+  it('should return false for arrays with a tagged discriminant property', () => {
+    const taggedArray = [] as any;
+    taggedArray.type = 'circle';
+    expect(isUnion(taggedArray)).toBe(false);
+  });
+
   it('should return false for object with numeric type', () => {
     expect(isUnion({ type: 123 })).toBe(false);
   });
@@ -74,6 +80,12 @@ describe('is', () => {
 
   it('should return false when type does not match', () => {
     expect(is(circle, 'rectangle')).toBe(false);
+  });
+
+  it('should return false for invalid inputs instead of throwing', () => {
+    expect(is(null as any, 'circle')).toBe(false);
+    expect(is(undefined as any, 'circle')).toBe(false);
+    expect(is(42 as any, 'circle')).toBe(false);
   });
 
   it('should return true for rectangle variant', () => {

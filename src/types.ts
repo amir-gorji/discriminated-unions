@@ -9,8 +9,8 @@
  * // MyUnion satisfies SampleUnion
  * ```
  */
-export type SampleUnion<Discriminant extends string | number | symbol> = {
-  [K in Discriminant]: any;
+export type SampleUnion<Discriminant extends PropertyKey> = {
+  [K in Discriminant]: string;
 };
 
 /**
@@ -34,7 +34,7 @@ export type SampleUnion<Discriminant extends string | number | symbol> = {
 export type Model<
   DiscriminantValue extends string,
   Data = {},
-  Discriminant extends string | number | symbol = 'type',
+  Discriminant extends PropertyKey = 'type',
 > = {
   [K in Discriminant]: DiscriminantValue;
 } & Data;
@@ -42,7 +42,8 @@ export type Model<
 /**
  * Exhaustive handler map for pattern matching on a discriminated union.
  * Requires a handler function for **every** variant in the union.
- * Each handler receives the full variant (including `type`) and must return `Result`.
+ * Each handler receives the variant data fields (without the discriminant) and
+ * must return `Result`.
  *
  * @typeParam T - The discriminated union type
  * @typeParam Result - The return type of all handler functions
@@ -60,7 +61,7 @@ export type Model<
 export type Matcher<
   T extends SampleUnion<Discriminant>,
   Result,
-  Discriminant extends string | number | symbol,
+  Discriminant extends PropertyKey,
   Payload extends any = never,
 > = {
   [K in T[Discriminant]]: T extends Model<K, infer Data, Discriminant>
@@ -93,7 +94,7 @@ export type Matcher<
 export type MatcherWithDefault<
   T extends SampleUnion<Discriminant>,
   Result,
-  Discriminant extends string | number | symbol,
+  Discriminant extends PropertyKey,
   Payload extends any = never,
 > = Partial<Matcher<T, Result, Discriminant, Payload>> & {
   Default: (payload: Payload) => Result;
@@ -111,18 +112,18 @@ export type MatcherWithDefault<
  * type Shape = Model<'circle', { radius: number }> | Model<'rect', { w: number; h: number }>;
  *
  * const doubleCircle: Mapper<Shape> = {
- *   circle: ({ type, radius }) => ({ type, radius: radius * 2 }),
+ *   circle: ({ radius }) => ({ radius: radius * 2 }),
  * };
  * // rectangle variants pass through unchanged
  * ```
  */
 export type Mapper<
   T extends SampleUnion<Discriminant>,
-  Discriminant extends string | number | symbol,
+  Discriminant extends PropertyKey,
   Payload extends any = never,
 > = {
   [K in T[Discriminant]]?: T extends Model<K, infer Data, Discriminant>
-    ? (input: Data, payload: Payload) => Data
+    ? (input: Data, payload: Payload) => Omit<Data, Discriminant>
     : never;
 };
 
@@ -138,25 +139,141 @@ export type Mapper<
  * type Shape = Model<'circle', { radius: number }> | Model<'rect', { w: number; h: number }>;
  *
  * const doubleAll: MapperAll<Shape> = {
- *   circle: ({ type, radius }) => ({ type, radius: radius * 2 }),
- *   rect: ({ type, w, h }) => ({ type, w: w * 2, h: h * 2 }),
+ *   circle: ({ radius }) => ({ radius: radius * 2 }),
+ *   rect: ({ w, h }) => ({ w: w * 2, h: h * 2 }),
  * };
  * ```
  */
 export type MapperAll<
   T extends SampleUnion<Discriminant>,
-  Discriminant extends string | number | symbol,
+  Discriminant extends PropertyKey,
   Payload extends any = never,
 > = {
   [K in T[Discriminant]]: T extends Model<K, infer Data, Discriminant>
-    ? (input: Data, payload: Payload) => Data
+    ? (input: Data, payload: Payload) => Omit<Data, Discriminant>
     : never;
 };
 
+/**
+ * Flattens an intersection of object types into a single object type.
+ * `{ a: 1 } & { b: 2 }` becomes `{ a: 1; b: 2 }`.
+ */
+type Prettify<T> = { [K in keyof T]: T[K] } & {};
+
 export type TakeDiscriminant<T, K extends keyof T = keyof T> = K extends keyof T
-  ? T[K] extends string | number | symbol
+  ? T[K] extends string
     ? string extends T[K]
       ? never
       : K // excludes wide types
     : never
   : never;
+
+type SchemaData<D extends string> = object & { [Disc in D]?: never };
+
+export type UnionSchema<D extends string> = Record<
+  string,
+  (...args: any[]) => SchemaData<D>
+>;
+
+/**
+ * Computes the full discriminated union type from a {@link createUnion} schema.
+ * For each key `K` in the schema, produces `ReturnType<Schema[K]> & { [D]: K }`
+ * and unions them together.
+ *
+ * @typeParam D - The discriminant property name
+ * @typeParam Schema - An object mapping variant names to constructor functions
+ *
+ * @example
+ * ```ts
+ * type Schema = {
+ *   circle: (radius: number) => { radius: number };
+ *   rect:   (w: number, h: number) => { w: number; h: number };
+ * };
+ * type Shape = InferUnionFromSchema<'type', Schema>;
+ * // { type: 'circle'; radius: number } | { type: 'rect'; w: number; h: number }
+ * ```
+ */
+export type InferUnionFromSchema<
+  D extends string,
+  Schema extends UnionSchema<D>,
+> = {
+  [K in keyof Schema & string]: Prettify<
+    { [Disc in D]: K } & Omit<ReturnType<Schema[K]>, D>
+  >;
+}[keyof Schema & string];
+
+/**
+ * Extracts the discriminated union type from a value returned by {@link createUnion}.
+ * Uses the phantom `_union` property that exists only at the type level.
+ *
+ * @example
+ * ```ts
+ * const Shape = createUnion('type', {
+ *   circle:    (radius: number) => ({ radius }),
+ *   rectangle: (w: number, h: number) => ({ w, h }),
+ * });
+ *
+ * type Shape = InferUnion<typeof Shape>;
+ * // { type: 'circle'; radius: number } | { type: 'rectangle'; w: number; h: number }
+ * ```
+ */
+export type InferUnion<T extends { _union: unknown }> = T['_union'];
+
+/**
+ * The return type of {@link createUnion}. Combines constructors, type guards,
+ * bound matchers, and metadata into a single object.
+ *
+ * @typeParam D - The discriminant property name
+ * @typeParam Schema - The variant constructor schema
+ */
+export type UnionFactory<
+  D extends string,
+  Schema extends UnionSchema<D>,
+> = {
+  [K in keyof Schema & string]: (
+    ...args: Parameters<Schema[K]>
+  ) => Prettify<Omit<ReturnType<Schema[K]>, D> & { [Disc in D]: K }>;
+} & {
+  readonly is: {
+    [K in keyof Schema & string]: (
+      x: unknown,
+    ) => x is ReturnType<Schema[K]> & { [Disc in D]: K };
+  };
+  readonly isKnown: (x: unknown) => x is InferUnionFromSchema<D, Schema>;
+  readonly match: <U, Payload extends any = never>(
+    handlers: Matcher<InferUnionFromSchema<D, Schema>, U, D, Payload>,
+  ) => (
+    ...inputs: [Payload] extends [never]
+      ? [input: InferUnionFromSchema<D, Schema>]
+      : [input: InferUnionFromSchema<D, Schema>, payload: Payload]
+  ) => U;
+  readonly matchWithDefault: <U, Payload extends any = never>(
+    handlers: MatcherWithDefault<
+      InferUnionFromSchema<D, Schema>,
+      U,
+      D,
+      Payload
+    >,
+  ) => (
+    ...inputs: [Payload] extends [never]
+      ? [input: InferUnionFromSchema<D, Schema>]
+      : [input: InferUnionFromSchema<D, Schema>, payload: Payload]
+  ) => U;
+  readonly map: <Payload extends any = never>(
+    handlers: Mapper<InferUnionFromSchema<D, Schema>, D, Payload>,
+  ) => (
+    ...inputs: [Payload] extends [never]
+      ? [input: InferUnionFromSchema<D, Schema>]
+      : [input: InferUnionFromSchema<D, Schema>, payload: Payload]
+  ) => InferUnionFromSchema<D, Schema>;
+  readonly mapAll: <Payload extends any = never>(
+    handlers: MapperAll<InferUnionFromSchema<D, Schema>, D, Payload>,
+  ) => (
+    ...inputs: [Payload] extends [never]
+      ? [input: InferUnionFromSchema<D, Schema>]
+      : [input: InferUnionFromSchema<D, Schema>, payload: Payload]
+  ) => InferUnionFromSchema<D, Schema>;
+  readonly variants: ReadonlyArray<keyof Schema & string>;
+  readonly discriminant: D;
+  readonly _union: InferUnionFromSchema<D, Schema>;
+};

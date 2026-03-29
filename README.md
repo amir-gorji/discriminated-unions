@@ -4,25 +4,45 @@
 [![license](https://img.shields.io/npm/l/dismatch)](./LICENSE)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue)](https://www.typescriptlang.org/)
 
-Type-safe pattern matching for TypeScript discriminated unions. Zero dependencies. Full type inference. Exhaustiveness enforced at compile time. ~988 B minified ESM.
+Type-safe discriminated unions for TypeScript. Define once, get constructors, type guards, and exhaustive pattern matching — all from a single schema. Zero dependencies. ~1.4 kB minified ESM.
 
 ```ts
-const area = match(shape)({
+import { createUnion, type InferUnion } from 'dismatch';
+
+const Shape = createUnion('type', {
+  circle:    (radius: number)                => ({ radius }),
+  rectangle: (width: number, height: number) => ({ width, height }),
+});
+
+type Shape = InferUnion<typeof Shape>;
+
+Shape.circle(5);                // { type: 'circle', radius: 5 }
+Shape.is.circle(shape);        // type guard → narrows to circle
+Shape.isKnown(apiResponse);    // runtime check against declared variants
+
+const area = Shape.match({
   circle:    ({ radius })        => Math.PI * radius ** 2,
   rectangle: ({ width, height }) => width * height,
-  triangle:  ({ base, height })  => (base * height) / 2,
 });
+
+area(Shape.circle(5)); // 78.54
 ```
+
+---
 
 ## Table of Contents
 
 - [Install](#install)
-- [Why dismatch](#why-dismatch)
-- [API Reference](#api-reference)
+- [Quick Start](#quick-start)
+  - [Define a union](#1-define-a-union)
+  - [Construct values](#2-construct-values)
+  - [Type guards](#3-type-guards)
+  - [Pattern matching](#4-pattern-matching)
+  - [Metadata](#5-metadata)
+- [Standalone Functions](#standalone-functions)
   - [match](#match)
   - [matchWithDefault](#matchwithdefault)
-  - [map](#map)
-  - [mapAll](#mapall)
+  - [map / mapAll](#map--mapall)
   - [is](#is)
   - [isUnion](#isunion)
   - [createPipeHandlers](#createpipehandlers)
@@ -43,334 +63,245 @@ npm install dismatch
 
 ---
 
-## Why dismatch
+## Quick Start
 
-TypeScript discriminated unions are expressive, but switch/if-else chains on them are brittle. Add a new variant and the compiler stays silent while your 12 unhandled cases become silent bugs:
+### 1. Define a union
 
-```ts
-// ❌ Before — silent gaps, no compile-time safety
-function area(shape: Shape): number {
-  switch (shape.type) {
-    case 'circle':    return Math.PI * shape.radius ** 2;
-    case 'rectangle': return shape.width * shape.height;
-    // added 'triangle' to Shape last week — nobody noticed
-  }
-}
-```
+`createUnion` takes a discriminant key and a schema of constructor functions. Each constructor returns the data fields — the discriminant is injected automatically.
 
 ```ts
-// ✅ After — TypeScript errors at every unhandled call site
-function area(shape: Shape): number {
-  return match(shape)({
-    circle:    ({ radius })        => Math.PI * radius ** 2,
-    rectangle: ({ width, height }) => width * height,
-    triangle:  ({ base, height })  => (base * height) / 2,
-    // forget triangle → TypeScript error here
-  });
-}
+import { createUnion, type InferUnion } from 'dismatch';
+
+const Result = createUnion('type', {
+  ok:      (data: string)    => ({ data }),
+  error:   (message: string) => ({ message }),
+  loading: ()                => ({}),
+});
+
+type Result = InferUnion<typeof Result>;
+// { type: 'ok'; data: string } | { type: 'error'; message: string } | { type: 'loading' }
 ```
 
-Add a new variant. TypeScript immediately flags every `match` call that hasn't been updated. No runtime surprises.
+### 2. Construct values
+
+```ts
+const r = Result.ok('hello');     // { type: 'ok', data: 'hello' }
+const e = Result.error('fail');   // { type: 'error', message: 'fail' }
+const l = Result.loading();       // { type: 'loading' }
+```
+
+### 3. Type guards
+
+Per-variant guards narrow the type. Work in `if` blocks and `.filter()`:
+
+```ts
+if (Result.is.ok(r)) {
+  console.log(r.data); // TypeScript knows: r is { type: 'ok'; data: string }
+}
+
+const errors = results.filter(Result.is.error);
+```
+
+`isKnown` checks if a value is any declared variant — useful at system boundaries:
+
+```ts
+Result.isKnown(apiResponse);              // true if type is 'ok' | 'error' | 'loading'
+Result.isKnown({ type: 'unknown' });      // false
+```
+
+### 4. Pattern matching
+
+All four matchers are bound to the factory and curried **handlers-first** — define once, apply many times:
+
+```ts
+// Exhaustive — every variant must have a handler
+const label = Result.match({
+  ok:      ({ data })    => `Data: ${data}`,
+  error:   ({ message }) => `Error: ${message}`,
+  loading: ()            => 'Loading...',
+});
+
+label(r); // 'Data: hello'
+
+// Partial — handle what you need, Default catches the rest
+const banner = Result.matchWithDefault({
+  error:   ({ message }) => `Something went wrong: ${message}`,
+  Default: ()            => 'All good',
+});
+
+// Transform — modify specific variants, rest pass through unchanged
+// The discriminant is re-injected automatically — no need to return it
+const cleared = Result.map({
+  error: ({ message }) => ({ message: '' }),
+});
+
+// Exhaustive transform — every variant gets a handler
+const normalized = Result.mapAll({
+  ok:      ({ data })    => ({ data: data.trim() }),
+  error:   ({ message }) => ({ message: message.trim() }),
+  loading: ()            => ({}),
+});
+```
+
+### 5. Metadata
+
+```ts
+Result.variants;      // readonly ['ok', 'error', 'loading']
+Result.discriminant;  // 'type'
+```
 
 ---
 
-## API Reference
+## Standalone Functions
+
+You can use dismatch functions directly on any discriminated union — no factory required.
 
 ### `match`
 
-Exhaustive pattern matching. Every variant must have a handler — TypeScript errors at compile time if one is missing, and throws at runtime if an unexpected value slips through (e.g. via `any` or an unchecked API response).
+Exhaustive pattern matching. TypeScript errors if a variant is missing.
 
 ```ts
 import { match } from 'dismatch';
 
-type Result =
-  | { type: 'ok'; data: string }
-  | { type: 'error'; message: string }
-  | { type: 'loading' };
+type Shape =
+  | { type: 'circle'; radius: number }
+  | { type: 'rectangle'; width: number; height: number };
 
-const label = match(result)({
-  ok:      ({ data })    => `Data: ${data}`,
-  error:   ({ message }) => `Error: ${message}`,
-  loading: ()            => 'Loading…',
+const area = match(shape)({
+  circle:    ({ radius })        => Math.PI * radius ** 2,
+  rectangle: ({ width, height }) => width * height,
 });
 ```
 
-Handlers receive the variant's properties. The return type is inferred from all handlers — it can be a string, number, JSX element, Promise, another union, anything.
-
-**Curried:** `match(value)` returns a reusable function. Bind once, apply different handler sets:
-
-```ts
-const handle = match(result);
-
-const statusCode = handle({ ok: () => 200,  error: () => 500, loading: () => 202 });
-const isHealthy  = handle({ ok: () => true, error: () => false, loading: () => false });
-```
-
----
-
 ### `matchWithDefault`
 
-Partial matching with a required `Default` fallback. Handle the variants you care about; `Default` catches everything else.
+Partial matching with a `Default` fallback.
 
 ```ts
 import { matchWithDefault } from 'dismatch';
 
 const banner = matchWithDefault(result)({
-  error:   ({ message }) => `Something went wrong: ${message}`,
+  error:   ({ message }) => `Error: ${message}`,
   Default: ()            => 'All good',
 });
 ```
 
-Use `matchWithDefault` when you genuinely don't need to handle every case. Prefer `match` everywhere else — exhaustive matching catches bugs at compile time when new variants are added.
+### `map` / `mapAll`
 
----
-
-### `map`
-
-Transform specific variants. The rest pass through **unchanged** (same object reference).
+`map` transforms specific variants — unmatched ones pass through (same reference). `mapAll` requires every variant. The discriminant is re-injected automatically — handlers return only the data fields.
 
 ```ts
-import { map } from 'dismatch';
+import { map, mapAll } from 'dismatch';
 
-// Only circles grow; rectangles and triangles are returned as-is
+// Only circles grow; rectangles pass through as-is
 const bigger = map(shape)({
-  circle: ({ radius }) => ({ type: 'circle' as const, radius: radius * 2 }),
+  circle: ({ radius }) => ({ radius: radius * 2 }),
 });
-```
 
-Handlers receive the variant's **data fields** (not including the discriminant key). The return must include the full object — provide the `type` literal explicitly so the result is a valid union variant. Variants without a handler are identity-passed (same object reference).
-
----
-
-### `mapAll`
-
-Like `map`, but every variant must have a handler — enforced at **compile time** (TypeScript errors if any are missing) and at **runtime** (throws `'Matcher incomplete!'` if an unexpected variant slips through via `any` or an untyped API boundary).
-
-```ts
-import { mapAll } from 'dismatch';
-
+// Every variant must be handled
 const normalized = mapAll(shape)({
-  circle:    ({ radius })        => ({ type: 'circle'    as const, radius: Math.abs(radius) }),
-  rectangle: ({ width, height }) => ({ type: 'rectangle' as const, width:  Math.abs(width),
-                                                                    height: Math.abs(height) }),
-  triangle:  ({ base, height })  => ({ type: 'triangle'  as const, base:   Math.abs(base),
-                                                                    height: Math.abs(height) }),
+  circle:    ({ radius })        => ({ radius: Math.abs(radius) }),
+  rectangle: ({ width, height }) => ({ width: Math.abs(width), height: Math.abs(height) }),
 });
 ```
-
-Use `mapAll` when transforming the whole union and you want the same exhaustiveness guarantee as `match`.
-
----
 
 ### `is`
 
-Type guard that narrows a union to a specific variant. Works in `if` blocks, `.filter()`, and anywhere TypeScript expects a type predicate.
+Type guard that narrows a union to a specific variant.
 
 ```ts
 import { is } from 'dismatch';
 
 if (is(shape, 'circle')) {
-  console.log(shape.radius); // TypeScript knows: shape is { type: 'circle'; radius: number }
+  console.log(shape.radius); // narrowed
 }
 
-// Array filtering — inferred element type is the narrowed variant
 const circles = shapes.filter((s) => is(s, 'circle'));
-//    ^? { type: 'circle'; radius: number }[]
 ```
-
----
 
 ### `isUnion`
 
-Runtime check that a value is a valid discriminated union (a non-null object with a string discriminant property). Useful at system boundaries — API responses, user input, external data.
+Runtime check that a value is a valid discriminated union.
 
 ```ts
 import { isUnion } from 'dismatch';
 
 isUnion({ type: 'ok', data: 42 }); // true
 isUnion(null);                      // false
-isUnion('hello');                   // false
-isUnion({ name: 'no type field' }); // false
-
-// Custom discriminant
-isUnion({ kind: 'click', x: 10 }, 'kind'); // true
+isUnion({ kind: 'click' }, 'kind'); // true — custom discriminant
 ```
-
----
 
 ### `createPipeHandlers`
 
-Creates a handler factory **bound to a discriminant key**. Returns `match`, `matchWithDefault`, `map`, and `mapAll` in **handlers-first** curried order — `(handlers) => (input) => result` — making them directly composable inside any `pipe` utility without wrapper lambdas.
+Handlers-first curried order for pipe composition. Define handlers once, get back a reusable function.
 
 ```ts
 import { createPipeHandlers } from 'dismatch';
 
 const shapeOps = createPipeHandlers<Shape>('type');
 
-// Define handlers once — get back a reusable (shape: Shape) => number
 const getArea = shapeOps.match({
   circle:    ({ radius })        => Math.PI * radius ** 2,
   rectangle: ({ width, height }) => width * height,
-  triangle:  ({ base, height })  => (base * height) / 2,
 });
 
-getArea(circle);    // 78.54…
-getArea(rectangle); // 24
+shapes.map(getArea); // no wrapper lambdas
 
-// Apply to an entire array — no wrapper lambdas
-const areas = shapes.map(getArea);
-
-// Compose directly in a pipe
-import { pipe } from 'fp-ts/function';
-
-const result = pipe(
-  shape,
-  shapeOps.match({
-    circle:    () => 'round',
-    rectangle: () => 'flat',
-    triangle:  () => 'pointy',
-  }),
-);
-```
-
-**Payload** — pass extra context to every handler by supplying a second type argument. Each handler receives the payload as its second argument, and the returned function accepts `(input, payload)`:
-
-```ts
-type Dimensions = { depth: number };
-
-const shapeOps = createPipeHandlers<Shape>('type');
-
-const calculateVolume = shapeOps.match<number, Dimensions>({
+// Payload support — pass extra context to every handler
+const volume = shapeOps.match<number, { depth: number }>({
   circle:    ({ radius },        { depth }) => Math.PI * radius ** 2 * depth,
   rectangle: ({ width, height }, { depth }) => width * height * depth,
-  triangle:  ({ base, height },  { depth }) => (base * height * depth) / 2,
 });
 
-calculateVolume(circle,    { depth: 10 }); // 785.4…
-calculateVolume(rectangle, { depth: 5  }); // 120
-
-// Works across all four methods:
-const scaleShape = shapeOps.map<Dimensions>({
-  circle: ({ type, radius }, { depth }) => ({ type, radius: radius * depth }),
-});
-
-scaleShape(circle, { depth: 2 }); // { type: 'circle', radius: 10 }
+volume(shape, { depth: 10 });
 ```
-
-When the payload type is omitted, handlers take only the variant data (no second argument) — fully backward-compatible with all existing usage.
-
-Regular `match(value)(handlers)` is great for one-off decisions. `createPipeHandlers` shines when you need to **reuse the same handler set** across many values or **compose** operations in a pipeline:
 
 | Use case | Prefer |
 |---|---|
 | One-off match on a single value | `match(value)(handlers)` |
-| Apply the same handler set to an array or stream | `createPipeHandlers` |
-| Compose multiple operations in a `pipe` | `createPipeHandlers` |
-| Pass a handler as a callback / higher-order function | `createPipeHandlers` |
-
-See the [`samples/`](./samples) directory for end-to-end real-world examples.
+| Reuse handlers across many values / arrays | `createPipeHandlers` |
+| Compose in a `pipe` or pass as callback | `createPipeHandlers` |
 
 ---
 
 ## Type Helpers
 
-### `Model<DiscriminantValue, Data?, Discriminant?>`
+### `InferUnion<T>`
 
-Constructs a single variant type. Both `Data` and `Discriminant` are optional — `Data` defaults to `{}` and `Discriminant` defaults to `'type'`.
-
-```ts
-import type { Model } from 'dismatch';
-
-// Minimal — empty data payload, 'type' discriminant
-type Idle    = Model<'idle'>;
-// → { type: 'idle' }
-
-// With data fields
-type Success = Model<'success', { data: User[] }>;
-// → { type: 'success'; data: User[] }
-
-type Failure = Model<'failure', { error: string; retries: number }>;
-// → { type: 'failure'; error: string; retries: number }
-
-type FetchState = Idle | Success | Failure;
-```
-
-With a custom discriminant key:
+Extracts the union type from a `createUnion` factory:
 
 ```ts
-type DogVariant = Model<'dog', { name: string }, 'kind'>;
-// → { kind: 'dog'; name: string }
-```
-
-### `UnionByArray<T, Discriminant?>`
-
-Derives a union type from a tuple of `Model` types. Useful when you define variants as a tuple (for iteration, schema generation, or documentation) and need the union type from it.
-
-```ts
-import type { Model, UnionByArray } from 'dismatch';
-
-type Variants = [
-  Model<'circle',    { radius: number }>,
-  Model<'rectangle', { width: number; height: number }>,
-];
-
-type Shape = UnionByArray<Variants>;
-// → Model<'circle', { radius: number }> | Model<'rectangle', { width: number; height: number }>
+type Shape = InferUnion<typeof Shape>;
 ```
 
 ### `TakeDiscriminant<T>`
 
-Extracts valid discriminant key candidates from a union type — keys whose value types are narrow (non-wide) strings. Used internally by `createPipeHandlers` to constrain the discriminant argument.
+Extracts valid discriminant keys from a union type — keys with narrow string values:
 
 ```ts
-import type { TakeDiscriminant } from 'dismatch';
-
 type D = TakeDiscriminant<Shape>; // 'type'
-type A = TakeDiscriminant<Animal>; // 'kind'
 ```
 
 ---
 
 ## Custom Discriminant
 
-All functions accept an optional discriminant parameter (default: `'type'`). Pass your field name as a second argument to match unions that use `kind`, `status`, `tag`, or any other key:
+All functions default to `'type'` but accept any discriminant key:
 
 ```ts
 type Animal =
-  | { kind: 'dog';  name: string }
-  | { kind: 'cat';  lives: number }
-  | { kind: 'bird'; canFly: boolean };
+  | { kind: 'dog'; name: string }
+  | { kind: 'cat'; lives: number };
 
-const sound = match(animal, 'kind')({
-  dog:  ({ name })   => `${name} barks`,
-  cat:  ()           => 'meow',
-  bird: ({ canFly }) => canFly ? 'tweet' : 'squawk',
+match(animal, 'kind')({ dog: ({ name }) => name, cat: () => 'meow' });
+is(animal, 'dog', 'kind');
+isUnion(animal, 'kind');
+
+// createUnion — pass as first argument
+const Animal = createUnion('kind', {
+  dog: (name: string) => ({ name }),
+  cat: (lives: number) => ({ lives }),
 });
-```
-
-Every function in the API follows the same signature:
-
-```ts
-matchWithDefault(animal, 'kind')({ dog: ..., Default: ... });
-map(animal,      'kind')({ cat: ... });
-mapAll(animal,   'kind')({ dog: ..., cat: ..., bird: ... });
-is(animal, 'dog',  'kind');
-isUnion(animal,    'kind');
-```
-
-With `createPipeHandlers`, pass the discriminant once at creation — all returned functions inherit it:
-
-```ts
-const animalOps = createPipeHandlers<Animal>('kind');
-
-const describe = animalOps.match({
-  dog:  ({ name })   => `Dog: ${name}`,
-  cat:  ({ lives })  => `Cat with ${lives} lives`,
-  bird: ({ canFly }) => `Bird (${canFly ? 'flies' : 'flightless'})`,
-});
-
-describe(dog);  // 'Dog: Rex'
-describe(bird); // 'Bird (flies)'
 ```
 
 ---
@@ -379,26 +310,18 @@ describe(bird); // 'Bird (flies)'
 
 ### Rendering UI
 
-Use `match` to map every state to a view — exhaustively, without else branches. Adding a new state variant forces you to update every render site at compile time:
-
 ```ts
-type FetchState<T> =
-  | { type: 'idle' }
-  | { type: 'loading' }
-  | { type: 'success'; data: T; stale: boolean }
-  | { type: 'failure'; error: string };
-
 function UserList({ state }: { state: FetchState<User[]> }) {
   return match(state)({
-    idle:    ()             => <button onClick={fetch}>Load users</button>,
-    loading: ()             => <Spinner />,
-    success: ({ data })     => <ul>{data.map(renderUser)}</ul>,
-    failure: ({ error })    => <ErrorBanner message={error} />,
+    idle:    ()          => <button onClick={fetch}>Load</button>,
+    loading: ()          => <Spinner />,
+    success: ({ data })  => <ul>{data.map(renderUser)}</ul>,
+    failure: ({ error }) => <ErrorBanner message={error} />,
   });
 }
 ```
 
-### Reducer / State Machine
+### Reducer
 
 ```ts
 type Action =
@@ -414,39 +337,6 @@ const reduce = (state: number, action: Action): number =>
   });
 ```
 
-### Selective State Transitions with `map`
-
-```ts
-type Notification =
-  | { type: 'email'; subject: string; read: boolean }
-  | { type: 'sms';   body: string;    read: boolean }
-  | { type: 'push';  title: string;   read: boolean };
-
-// Mark only emails as read — SMS and push pass through as the same object reference
-const markEmailRead = (n: Notification): Notification =>
-  map(n)({
-    email: ({ subject }) => ({ type: 'email' as const, subject, read: true }),
-  });
-```
-
-### Batch Operations with `createPipeHandlers`
-
-```ts
-const shapeOps = createPipeHandlers<Shape>('type');
-
-// Build the matcher once
-const getArea = shapeOps.match({
-  circle:    ({ radius })        => Math.PI * radius ** 2,
-  rectangle: ({ width, height }) => width * height,
-  triangle:  ({ base, height })  => (base * height) / 2,
-});
-
-// Apply to any collection — no wrapper lambdas, no ceremony
-const areas         = shapes.map(getArea);
-const totalArea     = areas.reduce((sum, a) => sum + a, 0);
-const largestIndex  = areas.indexOf(Math.max(...areas));
-```
-
 ### Pipe Composition
 
 ```ts
@@ -454,79 +344,40 @@ import { pipe } from 'fp-ts/function'; // or any pipe utility
 
 const shapeOps = createPipeHandlers<Shape>('type');
 
-const describeArea = pipe(
+const result = pipe(
   shape,
   shapeOps.match({
-    circle:    ({ radius })        => Math.PI * radius ** 2,
-    rectangle: ({ width, height }) => width * height,
-    triangle:  ({ base, height })  => (base * height) / 2,
+    circle:    () => 'round',
+    rectangle: () => 'flat',
   }),
-  (area) => `Area: ${area.toFixed(2)} sq units`,
 );
-```
-
-### Async Handlers
-
-Because handlers are plain functions, returning a `Promise` requires no extra configuration. TypeScript automatically infers `Promise<T>` as the return type when handlers are async:
-
-```ts
-type JobState =
-  | { type: 'queued';  jobId: string }
-  | { type: 'running'; jobId: string; progress: number }
-  | { type: 'done';    result: string }
-  | { type: 'failed';  error: string };
-
-const output = await match(job)({
-  queued:  ({ jobId })  => enqueue(jobId),
-  running: ({ jobId })  => poll(jobId),
-  done:    ({ result }) => save(result),
-  failed:  ({ error })  => notify(error),
-});
-```
-
-`createPipeHandlers` composes equally well in async pipelines — build the handler once, then apply it to an entire array with `Promise.all`:
-
-```ts
-const processJob = jobOps.match({
-  queued:  ({ jobId })  => enqueue(jobId),
-  running: ({ jobId })  => poll(jobId),
-  done:    ({ result }) => save(result),
-  failed:  ({ error })  => notify(error),
-});
-
-const results = await Promise.all(jobs.map(processJob));
 ```
 
 ---
 
 ## Clean Stack Traces
 
-When dismatch throws (e.g. an unvalidated API response bypasses the type system), the stack trace points to **your call site** — not into minified library internals.
+When dismatch throws, the stack trace points to **your call site** — not library internals:
 
 ```
-// ❌ Typical library — your code is buried under framework frames
 Error: Data is not of type discriminated union!
-    at validate  (node_modules/dismatch/dist/index.cjs:1:892)
-    at match     (node_modules/dismatch/dist/index.cjs:1:1205)
-    at handleResponse (src/api.ts:27:18)
-
-// ✅ dismatch — stack starts where you made the call
-Error: Data is not of type discriminated union!
-    at handleResponse (src/api.ts:27:18)
+    at handleResponse (src/api.ts:27:18)   // ← your code, not ours
 ```
-
-Powered by `Error.captureStackTrace` (V8/Node.js). In environments without it the error still throws — the stack just isn't trimmed.
 
 ---
 
 ## Contributing
 
 ```bash
-npm test             # run the test suite
+npm test             # run tests
+npm run test:package # verify packed exports and tarball contents
 npm run test:watch   # watch mode
-npm run ts:ci        # type-check without emitting
+npm run ts:ci        # type-check
+npm run ts:package   # type-check the built package surface
 npm run build        # compile to lib/
 ```
+
+See [`samples/`](./samples) for real-world examples.
 
 ---
 

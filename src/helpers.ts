@@ -10,9 +10,6 @@ declare global {
 }
 
 export function clearStackTrace(error: unknown, parentFn: Function) {
-  if (Error.captureStackTrace) {
-    Error.captureStackTrace(error as Error, parentFn);
-  }
-
+  Error.captureStackTrace?.(error as Error, parentFn);
   return error;
 }

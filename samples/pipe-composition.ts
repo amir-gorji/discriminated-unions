@@ -13,24 +13,28 @@
  */
 
 import { createPipeHandlers, is } from 'dismatch';
-import type { Model } from 'dismatch';
 
 // ── A tiny pipe() — swap this for fp-ts/function pipe if you use it ──────────
 
 function pipe<A>(a: A): A;
 function pipe<A, B>(a: A, f1: (a: A) => B): B;
 function pipe<A, B, C>(a: A, f1: (a: A) => B, f2: (b: B) => C): C;
-function pipe<A, B, C, D>(a: A, f1: (a: A) => B, f2: (b: B) => C, f3: (c: C) => D): D;
+function pipe<A, B, C, D>(
+  a: A,
+  f1: (a: A) => B,
+  f2: (b: B) => C,
+  f3: (c: C) => D,
+): D;
 function pipe(value: unknown, ...fns: Array<(x: unknown) => unknown>): unknown {
   return fns.reduce((acc, fn) => fn(acc), value);
 }
 
 // ── Domain: geometric shapes ───────────────────────────────────────────────────
 
-type Circle    = Model<'circle',    { radius: number }>;
-type Rectangle = Model<'rectangle', { width: number; height: number }>;
-type Triangle  = Model<'triangle',  { base: number; height: number }>;
-type Shape     = Circle | Rectangle | Triangle;
+type Shape =
+  | { type: 'circle'; radius: number }
+  | { type: 'rectangle'; width: number; height: number }
+  | { type: 'triangle'; base: number; height: number };
 
 // ── Domain: normalised report ─────────────────────────────────────────────────
 
@@ -49,21 +53,21 @@ const shapeOps = createPipeHandlers<Shape, 'type'>('type');
 // `(shape: Shape) => T` function — ready for pipe / array methods.
 
 const getName = shapeOps.match({
-  circle:    () => 'Circle',
+  circle: () => 'Circle',
   rectangle: () => 'Rectangle',
-  triangle:  () => 'Triangle',
+  triangle: () => 'Triangle',
 });
 
 const getArea = shapeOps.match({
-  circle:    ({ radius })        => Math.PI * radius ** 2,
+  circle: ({ radius }) => Math.PI * radius ** 2,
   rectangle: ({ width, height }) => width * height,
-  triangle:  ({ base, height })  => (base * height) / 2,
+  triangle: ({ base, height }) => (base * height) / 2,
 });
 
 const getPerimeter = shapeOps.match({
-  circle:    ({ radius })        => 2 * Math.PI * radius,
+  circle: ({ radius }) => 2 * Math.PI * radius,
   rectangle: ({ width, height }) => 2 * (width + height),
-  triangle:  ({ base, height })  => {
+  triangle: ({ base, height }) => {
     // assume right triangle: hypotenuse = √(base² + height²)
     const hyp = Math.sqrt(base ** 2 + height ** 2);
     return base + height + hyp;
@@ -73,15 +77,19 @@ const getPerimeter = shapeOps.match({
 /**
  * Normalise all dimensions to absolute values without touching other variants.
  *
- * map() handler parameters are typed as the variant's Data (without the discriminant).
- * Provide the type literal explicitly in the return to reconstruct the full variant.
+ * map() handlers receive the variant payload fields and return transformed data.
+ * The discriminant is re-injected automatically by the runtime.
  */
 const normalise = shapeOps.map({
-  circle:    ({ radius })        => ({ type: 'circle'    as const, radius: Math.abs(radius) }),
-  rectangle: ({ width, height }) => ({ type: 'rectangle' as const, width:  Math.abs(width),
-                                                                    height: Math.abs(height) }),
-  triangle:  ({ base, height })  => ({ type: 'triangle'  as const, base:   Math.abs(base),
-                                                                    height: Math.abs(height) }),
+  circle: ({ radius }) => ({ radius: Math.abs(radius) }),
+  rectangle: ({ width, height }) => ({
+    width: Math.abs(width),
+    height: Math.abs(height),
+  }),
+  triangle: ({ base, height }) => ({
+    base: Math.abs(base),
+    height: Math.abs(height),
+  }),
 });
 
 // ── Build a full report in a pipe ─────────────────────────────────────────────
@@ -89,11 +97,11 @@ const normalise = shapeOps.map({
 function buildReport(raw: Shape): ShapeReport {
   return pipe(
     raw,
-    normalise,                          // ensure positive dimensions
+    normalise, // ensure positive dimensions
     (shape) => ({
-      name:        getName(shape),
-      area:        getArea(shape),
-      perimeter:   getPerimeter(shape),
+      name: getName(shape),
+      area: getArea(shape),
+      perimeter: getPerimeter(shape),
       description: `${getName(shape)} with area ${getArea(shape).toFixed(2)}`,
     }),
   );
@@ -102,10 +110,10 @@ function buildReport(raw: Shape): ShapeReport {
 // ── Batch processing — no wrapper lambdas ─────────────────────────────────────
 
 const catalog: Shape[] = [
-  { type: 'circle',    radius: 5 },
+  { type: 'circle', radius: 5 },
   { type: 'rectangle', width: 4, height: 6 },
-  { type: 'triangle',  base: 3, height: 4 },
-  { type: 'circle',    radius: -7 },   // negative — normalise will fix this
+  { type: 'triangle', base: 3, height: 4 },
+  { type: 'circle', radius: -7 }, // negative — normalise will fix this
   { type: 'rectangle', width: 10, height: 2 },
 ];
 
@@ -131,14 +139,14 @@ const byAreaDesc = [...catalog]
  */
 
 const getShortLabel = shapeOps.match({
-  circle:    ({ radius })        => `⬤ r=${radius}`,
+  circle: ({ radius }) => `⬤ r=${radius}`,
   rectangle: ({ width, height }) => `▬ ${width}×${height}`,
-  triangle:  ({ base, height })  => `▲ b=${base} h=${height}`,
+  triangle: ({ base, height }) => `▲ b=${base} h=${height}`,
 });
 
 const getColor = shapeOps.matchWithDefault({
-  circle: () => '#4f86f7',           // blue for circles
-  Default: () => '#f7a24f',          // orange for everything else
+  circle: () => '#4f86f7', // blue for circles
+  Default: () => '#f7a24f', // orange for everything else
 });
 
 console.log(reports.map((r) => `${r.name}: area=${r.area.toFixed(2)}`));

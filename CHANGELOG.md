@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.0.0] - 2026-03-27
+
+### Added
+- `createUnion(discriminant, schema)` — single-definition factory producing constructors, per-variant type guards (`.is.<variant>`), schema-aware runtime check (`.isKnown`), and bound `match`/`matchWithDefault`/`map`/`mapAll` methods
+- `InferUnion<T>` type helper — extracts the union type from a `createUnion` factory
+- `samples/create-union.ts` end-to-end example
+- 49 new tests covering constructors, guards, bound matchers, metadata, and edge cases
+
+### Changed
+- **BREAKING:** Removed `Model` and `UnionByArray` type helpers from public exports — use `InferUnion` with `createUnion` instead, or define union types inline
+- `Mapper` / `MapperAll` handler return type changed from `Omit<Data, Discriminant>` to `Omit<Data, Discriminant> & Partial<Pick<Data, Discriminant>>` — the discriminant is now optional in the return, so handlers can omit it, include it, or spread the input (e.g. `(ok) => ({ ...ok, data: transformed })`)
+- README fully rewritten — `createUnion` is now the primary recommended workflow
+- Updated `samples/fetch-state.ts`, `samples/notifications.ts`, `samples/pipe-composition.ts`
+
 ## [0.3.0] - 2026-03-27
 
 ### Added

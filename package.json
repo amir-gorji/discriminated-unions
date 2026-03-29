@@ -41,7 +41,7 @@
     "ts:package": "tsc -p tsconfig.published.json",
     "ts:watch": "tsc --watch",
     "prepack": "npm run build",
-    "prepublishOnly": "npm run ts:ci && npm run test && npm run build && npm run test:package && npm run ts:package"
+    "prepublishOnly": "rm -rf lib && npm run ts:ci && npm run test && npm run build && npm run test:package && npm run ts:package"
   },
   "repository": {
     "type": "git",

@@ -13,12 +13,14 @@ const pkg = JSON.parse(
 const expectedExports = [
   'createPipeHandlers',
   'createUnion',
+  'fold',
   'is',
   'isUnion',
   'map',
   'mapAll',
   'match',
   'matchWithDefault',
+  'narrow',
 ].sort();
 
 const requiredFiles = [

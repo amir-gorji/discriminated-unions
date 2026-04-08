@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.1.0] - 2026-04-08
+
+### Added
+
+- `narrow` — multi-variant type predicate that narrows a union to a sub-union of specified variants. Two calling styles: value-first for if-blocks (`narrow(value, ['ok', 'error'])`) and keys-first predicate factory for `.filter()` (`items.filter(narrow(['ok', 'error']))`). Supports custom discriminant keys.
+- `fold` — exhaustive single-pass aggregator (reduce) over a collection of union values. Curried `fold(items, initial)(handlers)` with compile-time exhaustiveness checking. Each handler receives `(accumulator, variantData)` and returns the new accumulator.
+- `Folder<T, Acc, Discriminant>` type helper for fold handler maps
+- `narrow` and `fold` bound methods on `createUnion` factories and `createPipeHandlers` objects
+- Test suites for `narrow` (17 cases) and `fold` (7 cases)
+
+### Changed
+
+- README updated with `narrow` and `fold` sections, examples, and comparison table entries
+- Bundle size updated from ~1.4 kB to ~1.7 kB
+
 ## [1.0.0] - 2026-03-29
 
 ### Added

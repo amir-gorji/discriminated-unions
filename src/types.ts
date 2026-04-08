@@ -50,7 +50,7 @@ export type Model<
  *
  * @example
  * ```ts
- * type Shape = Model<'circle', { radius: number }> | Model<'rect', { w: number; h: number }>;
+ * type Shape = { type: 'circle', radius: number } | { type: 'rect', w: number; h: number };
  *
  * const area: Matcher<Shape, number> = {
  *   circle: ({ radius }) => Math.PI * radius ** 2,
@@ -83,7 +83,7 @@ export type Matcher<
  *
  * @example
  * ```ts
- * type Shape = Model<'circle', { radius: number }> | Model<'rect', { w: number; h: number }>;
+ * type Shape = { type: 'circle', radius: number } | { type: 'rect', w: number; h: number };
  *
  * const describe: MatcherWithDefault<Shape, string> = {
  *   circle: ({ radius }) => `Circle with radius ${radius}`,
@@ -109,7 +109,7 @@ export type MatcherWithDefault<
  *
  * @example
  * ```ts
- * type Shape = Model<'circle', { radius: number }> | Model<'rect', { w: number; h: number }>;
+ * type Shape = { type: 'circle', radius: number } | { type: 'rect', w: number; h: number };
  *
  * const doubleCircle: Mapper<Shape> = {
  *   circle: ({ radius }) => ({ radius: radius * 2 }),
@@ -136,7 +136,7 @@ export type Mapper<
  *
  * @example
  * ```ts
- * type Shape = Model<'circle', { radius: number }> | Model<'rect', { w: number; h: number }>;
+ * type Shape = { type: 'circle', radius: number } | { type: 'rect', w: number; h: number };
  *
  * const doubleAll: MapperAll<Shape> = {
  *   circle: ({ radius }) => ({ radius: radius * 2 }),
@@ -151,6 +151,33 @@ export type MapperAll<
 > = {
   [K in T[Discriminant]]: T extends Model<K, infer Data, Discriminant>
     ? (input: Data, payload: Payload) => Omit<Data, Discriminant>
+    : never;
+};
+
+/**
+ * Exhaustive handler map for folding (reducing) a collection of discriminated union values.
+ * Each handler receives the accumulator and the variant's data, and returns the new accumulator.
+ *
+ * @typeParam T - The discriminated union type
+ * @typeParam Acc - The accumulator type
+ *
+ * @example
+ * ```ts
+ * type Shape = { type: 'circle', radius: number } | { type: 'rect', w: number; h: number };
+ *
+ * const counter: Folder<Shape, { circles: number; rects: number }> = {
+ *   circle: (acc, { radius }) => ({ ...acc, circles: acc.circles + 1 }),
+ *   rect: (acc, { w, h }) => ({ ...acc, rects: acc.rects + 1 }),
+ * };
+ * ```
+ */
+export type Folder<
+  T extends SampleUnion<Discriminant>,
+  Acc,
+  Discriminant extends PropertyKey,
+> = {
+  [K in T[Discriminant]]: T extends Model<K, infer Data, Discriminant>
+    ? (acc: Acc, input: Data) => Acc
     : never;
 };
 
@@ -226,10 +253,7 @@ export type InferUnion<T extends { _union: unknown }> = T['_union'];
  * @typeParam D - The discriminant property name
  * @typeParam Schema - The variant constructor schema
  */
-export type UnionFactory<
-  D extends string,
-  Schema extends UnionSchema<D>,
-> = {
+export type UnionFactory<D extends string, Schema extends UnionSchema<D>> = {
   [K in keyof Schema & string]: (
     ...args: Parameters<Schema[K]>
   ) => Prettify<Omit<ReturnType<Schema[K]>, D> & { [Disc in D]: K }>;
@@ -273,6 +297,18 @@ export type UnionFactory<
       ? [input: InferUnionFromSchema<D, Schema>]
       : [input: InferUnionFromSchema<D, Schema>, payload: Payload]
   ) => InferUnionFromSchema<D, Schema>;
+  readonly narrow: <Keys extends ReadonlyArray<keyof Schema & string>>(
+    keys: Keys,
+  ) => (
+    x: unknown,
+  ) => x is Extract<
+    InferUnionFromSchema<D, Schema>,
+    { [Disc in D]: Keys[number] }
+  >;
+  readonly fold: <Acc>(
+    items: ReadonlyArray<InferUnionFromSchema<D, Schema>>,
+    initial: Acc,
+  ) => (handlers: Folder<InferUnionFromSchema<D, Schema>, Acc, D>) => Acc;
   readonly variants: ReadonlyArray<keyof Schema & string>;
   readonly discriminant: D;
   readonly _union: InferUnionFromSchema<D, Schema>;

@@ -3,9 +3,11 @@ export {
   matchWithDefault,
   map,
   mapAll,
+  narrow,
+  fold,
   createPipeHandlers,
   createUnion,
   is,
   isUnion,
 } from './unions';
-export type { TakeDiscriminant, InferUnion } from './types';
+export type { TakeDiscriminant, InferUnion, Folder } from './types';

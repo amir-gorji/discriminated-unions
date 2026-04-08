@@ -4,7 +4,7 @@
 [![license](https://img.shields.io/npm/l/dismatch)](./LICENSE)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue)](https://www.typescriptlang.org/)
 
-Type-safe discriminated unions for TypeScript. Define once, get constructors, type guards, and exhaustive pattern matching — all from a single schema. Zero dependencies. ~1.4 kB minified ESM.
+Type-safe discriminated unions for TypeScript. Define once, get constructors, type guards, and exhaustive pattern matching — all from a single schema. Zero dependencies. ~1.7 kB minified.
 
 ```ts
 import { createUnion, type InferUnion } from 'dismatch';
@@ -44,6 +44,8 @@ area(Shape.circle(5)); // 78.54
   - [match](#match)
   - [matchWithDefault](#matchwithdefault)
   - [map / mapAll](#map--mapall)
+  - [narrow](#narrow)
+  - [fold](#fold)
   - [is](#is)
   - [isUnion](#isunion)
   - [createPipeHandlers](#createpipehandlers)
@@ -70,10 +72,12 @@ npm install dismatch
 
 | Capability                         | dismatch                | ts-pattern | unionize       | @effect/match     |
 | ---------------------------------- | ----------------------- | ---------- | -------------- | ----------------- |
-| Bundle size                        | **~1.4 kB**             | ~2 kB      | unclear        | large (ecosystem) |
+| Bundle size                        | **~1.7 kB**             | ~2 kB      | unclear        | large (ecosystem) |
 | Zero dependencies                  | Yes                     | Yes        | Yes            | No                |
 | Exhaustive matching (compile time) | Yes                     | Yes        | Yes            | Yes               |
 | Schema-aware runtime validation    | **Yes**                 | No         | No             | No                |
+| Multi-variant narrowing (`narrow`) | **Yes**                 | No         | No             | No                |
+| Collection folding (`fold`)        | **Yes**                 | No         | No             | No                |
 | Partial transforms (`map`)         | **Yes**                 | No         | No             | No                |
 | Clean stack traces                 | **Yes**                 | No         | No             | No                |
 | Payload to handlers                | **Yes**                 | No         | No             | No                |
@@ -81,7 +85,7 @@ npm install dismatch
 | Maintenance                        | Active                  | Active     | Inactive       | Active            |
 | Beyond discriminated unions        | No                      | Yes        | No             | Yes               |
 
-`dismatch` is the complete discriminated union toolkit for TypeScript, that's what makes it extremely powerful in this tiny field.
+`dismatch` is the most complete discriminated union toolkit in TypeScript with rare features.
 
 ---
 
@@ -131,6 +135,19 @@ Result.isKnown(apiResponse); // true if type is 'ok' | 'error' | 'loading'
 Result.isKnown({ type: 'unknown' }); // false
 ```
 
+`narrow` creates a predicate that narrows to a sub-union of multiple variants:
+
+```ts
+const results: Result[] = [
+  Result.ok('hi'),
+  Result.error('no'),
+  Result.loading(),
+];
+
+const settled = results.filter(Result.narrow(['ok', 'error']));
+// settled: ({ type: 'ok'; data: string } | { type: 'error'; message: string })[]
+```
+
 ### 4. Pattern matching
 
 All four matchers are bound to the factory and curried **handlers-first** — define once, apply many times:
@@ -162,6 +179,13 @@ const normalized = Result.mapAll({
   ok: ({ data }) => ({ data: data.trim() }),
   error: ({ message }) => ({ message: message.trim() }),
   loading: () => ({}),
+});
+
+// Fold — exhaustive aggregation over a collection
+const stats = Result.fold(results, { oks: 0, errors: 0, loadings: 0 })({
+  ok: (acc) => ({ ...acc, oks: acc.oks + 1 }),
+  error: (acc) => ({ ...acc, errors: acc.errors + 1 }),
+  loading: (acc) => ({ ...acc, loadings: acc.loadings + 1 }),
 });
 ```
 
@@ -230,6 +254,60 @@ const normalized = mapAll(shape)({
 });
 ```
 
+### `narrow`
+
+Multi-variant type predicate — narrows a union to a sub-union of specified variants. Two calling styles:
+
+```ts
+import { narrow } from 'dismatch';
+
+type Notification =
+  | { type: 'email'; subject: string }
+  | { type: 'sms'; body: string }
+  | { type: 'push'; title: string };
+
+// Value-first — for if-blocks
+if (narrow(notification, ['email', 'push'])) {
+  notification; // EmailNotification | PushNotification
+}
+
+// Keys-first — predicate factory for .filter()
+const digital = notifications.filter(narrow(['email', 'push']));
+// digital: (EmailNotification | PushNotification)[]
+
+// Custom discriminant
+narrow(event, ['click', 'keydown'], 'kind');
+```
+
+### `fold`
+
+Exhaustive single-pass aggregator over a collection of discriminated union values. Each handler receives `(accumulator, variantData)` and returns the new accumulator. All variants must have handlers.
+
+```ts
+import { fold } from 'dismatch';
+
+type Shape =
+  | { type: 'circle'; radius: number }
+  | { type: 'rectangle'; width: number; height: number };
+
+const shapes: Shape[] = [
+  { type: 'circle', radius: 5 },
+  { type: 'rectangle', width: 4, height: 6 },
+  { type: 'circle', radius: 10 },
+];
+
+const stats = fold(shapes, { circles: 0, totalArea: 0 })({
+  circle: (acc, { radius }) => ({
+    circles: acc.circles + 1,
+    totalArea: acc.totalArea + Math.PI * radius ** 2,
+  }),
+  rectangle: (acc, { width, height }) => ({
+    ...acc,
+    totalArea: acc.totalArea + width * height,
+  }),
+});
+```
+
 ### `is`
 
 Type guard that narrows a union to a specific variant.
@@ -241,7 +319,7 @@ if (is(shape, 'circle')) {
   console.log(shape.radius); // narrowed
 }
 // Supposing only shape1 is a circle
-const shapes:Shape[] = [ shape1, shape2 ];
+const shapes: Shape[] = [shape1, shape2];
 
 const circles = shapes.filter((s) => is(s, 'circle')); // Expect -> [shape1]
 ```
@@ -320,11 +398,37 @@ Extracts valid discriminant keys from a union type — keys with narrow string v
 type D = TakeDiscriminant<Shape>; // 'type'
 ```
 
+### `Folder<T, Acc, Discriminant>`
+
+Handler map type for `fold` — each handler takes `(accumulator, variantData)` and returns the new accumulator:
+
+```ts
+import type { Folder } from 'dismatch';
+
+type ShapeFolder = Folder<Shape, number, 'type'>;
+// { circle: (acc: number, input: { radius: number }) => number; rectangle: ... }
+```
+
 ---
 
 ## Custom Discriminant
 
-All functions default to `'type'` but accept any discriminant key:
+I recommend using `'type'` as your discriminant key. It is the default for all standalone functions, so you never need to pass it explicitly:
+
+```ts
+type Animal = { type: 'dog'; name: string } | { type: 'cat'; lives: number };
+
+match(animal)({ dog: ({ name }) => name, cat: () => 'meow' });
+is(animal, 'dog');
+isUnion(animal);
+
+const Animal = createUnion('type', {
+  dog: (name: string) => ({ name }),
+  cat: (lives: number) => ({ lives }),
+});
+```
+
+If you need a different discriminant, all functions accept it as an extra argument:
 
 ```ts
 type Animal = { kind: 'dog'; name: string } | { kind: 'cat'; lives: number };
@@ -333,7 +437,6 @@ match(animal, 'kind')({ dog: ({ name }) => name, cat: () => 'meow' });
 is(animal, 'dog', 'kind');
 isUnion(animal, 'kind');
 
-// createUnion — pass as first argument
 const Animal = createUnion('kind', {
   dog: (name: string) => ({ name }),
   cat: (lives: number) => ({ lives }),

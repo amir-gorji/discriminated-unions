@@ -1,5 +1,6 @@
 import { clearStackTrace } from './helpers';
 import {
+  Folder,
   InferUnionFromSchema,
   Mapper,
   MapperAll,
@@ -285,6 +286,106 @@ export function matchWithDefault<
 }
 
 /**
+ * Multi-variant type predicate that narrows a discriminated union to a sub-union.
+ *
+ * **Value-first** (for if-blocks): pass the union value and variant keys.
+ * **Keys-first** (predicate factory): pass only variant keys to get a reusable predicate for `.filter()`.
+ *
+ * @example
+ * ```ts
+ * // Value-first — narrows inside if-blocks
+ * if (narrow(notification, ['email', 'push'])) {
+ *   notification; // EmailNotification | PushNotification
+ * }
+ *
+ * // Keys-first — predicate factory for .filter()
+ * const digital = notifications.filter(narrow(['email', 'push']));
+ * ```
+ */
+export function narrow<
+  T extends SampleUnion<Discriminant>,
+  U extends T[Discriminant],
+  Discriminant extends PropertyKey = 'type',
+>(
+  union: T,
+  variants: readonly U[],
+  discriminant?: Discriminant,
+): union is Extract<T, { [K in Discriminant]: U }>;
+
+export function narrow<
+  T extends SampleUnion<Discriminant>,
+  U extends T[Discriminant],
+  Discriminant extends PropertyKey = 'type',
+>(
+  variants: readonly U[],
+  discriminant?: Discriminant,
+): (union: T) => union is Extract<T, { [K in Discriminant]: U }>;
+
+export function narrow(
+  unionOrVariants: unknown,
+  variantsOrDiscriminant?: readonly string[] | PropertyKey,
+  maybeDiscriminant?: PropertyKey,
+): any {
+  if (Array.isArray(unionOrVariants)) {
+    const variants = unionOrVariants as readonly string[];
+    const discriminant = (variantsOrDiscriminant ?? 'type') as PropertyKey;
+    return (input: unknown) =>
+      isUnion(input, discriminant) &&
+      variants.includes((input as any)[discriminant]);
+  }
+  const union = unionOrVariants;
+  const variants = variantsOrDiscriminant as readonly string[];
+  const discriminant = (maybeDiscriminant ?? 'type') as PropertyKey;
+  return (
+    isUnion(union, discriminant) &&
+    variants.includes((union as any)[discriminant])
+  );
+}
+
+/**
+ * Exhaustive single-pass aggregator over a collection of discriminated union values.
+ * Each handler receives `(accumulator, variantData)` and returns the new accumulator.
+ * All variants must have handlers — TypeScript errors on missing variants.
+ *
+ * @param items - The array of discriminated union values to fold over
+ * @param initial - The initial accumulator value
+ * @param discriminant - The property used to tell variants apart. Defaults to `'type'`.
+ * @returns A curried function that accepts an exhaustive handler map and returns the final accumulator
+ *
+ * @example
+ * ```ts
+ * const stats = fold(shapes, { circles: 0, rects: 0 })({
+ *   circle: (acc, { radius }) => ({ ...acc, circles: acc.circles + 1 }),
+ *   rectangle: (acc, { width, height }) => ({ ...acc, rects: acc.rects + 1 }),
+ * });
+ * ```
+ */
+export function fold<
+  T extends SampleUnion<Discriminant>,
+  Acc,
+  Discriminant extends PropertyKey = 'type',
+>(
+  items: readonly T[],
+  initial: Acc,
+  discriminant: Discriminant = 'type' as Discriminant,
+): (handlers: Folder<T, Acc, Discriminant>) => Acc {
+  return (handlers) => {
+    let acc = initial;
+    for (const item of items) {
+      const key = item[discriminant] as string;
+      const handler = (
+        handlers as Record<string, ((acc: Acc, input: any) => Acc) | undefined>
+      )[key];
+      if (!handler) {
+        throw clearStackTrace(new Error('No handler'), fold);
+      }
+      acc = handler(acc, item);
+    }
+    return acc;
+  };
+}
+
+/**
  * Creates a pipe-friendly handler factory bound to a specific discriminant key.
  * Returns an object whose methods follow the reversed-curry shape `(handlers) => (input) => result`,
  * making them composable inside FP `pipe` utilities without wrapper lambdas.
@@ -356,6 +457,16 @@ export function createPipeHandlers<
           : [input: T, payload: Payload]
       ): T =>
         mapAll(inputs[0], discriminant, inputs[1])(handlers),
+
+    narrow:
+      <U extends T[Discriminant]>(variants: readonly U[]) =>
+      (union: T): union is Extract<T, { [K in Discriminant]: U }> =>
+        narrow(union, variants, discriminant),
+
+    fold:
+      <Acc>(items: readonly T[], initial: Acc) =>
+      (handlers: Folder<T, Acc, Discriminant>): Acc =>
+        fold(items, initial, discriminant)(handlers),
   };
 }
 

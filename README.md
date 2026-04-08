@@ -265,16 +265,23 @@ Handlers-first curried order for pipe composition. Define handlers once, get bac
 ```ts
 import { createPipeHandlers } from 'dismatch';
 
+type Shape =
+  | { type: 'circle'; radius: number }
+  | { type: 'rectangle'; width: number; height: number };
+
 const shapeOps = createPipeHandlers<Shape>('type');
 
 const getArea = shapeOps.match({
-  circle: ({ radius }) => Math.PI * radius ** 2,
+  circle: ({ radius }) => Math.PI * radius ** 2, // calculate the area, then round in 2 decimal places
   rectangle: ({ width, height }) => width * height,
 });
 
-const shapes: Shape[] = [{ type: 'circle', radius: 1 }, { type: 'rectangle', width: 2, height: 3 }]
+const shapes: Shape[] = [
+  { type: 'circle', radius: 1 },
+  { type: 'rectangle', width: 2, height: 3 },
+];
 
-shapes.map(getArea); // Expect -> [3.14… , 6]
+shapes.map(getArea); // Expect -> [3.14, 6]
 
 // Payload support — pass extra context to every handler
 const volume = shapeOps.match<number, { depth: number }>({
@@ -282,7 +289,9 @@ const volume = shapeOps.match<number, { depth: number }>({
   rectangle: ({ width, height }, { depth }) => width * height * depth,
 });
 
-volume(shape, { depth: 10 });
+const shape: Shape = { type: 'rectangle', width: 2, height: 5 };
+
+volume(shape, { depth: 10 }); // Expect -> 100
 ```
 
 | Use case                                   | Prefer                   |

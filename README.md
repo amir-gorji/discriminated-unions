@@ -268,13 +268,13 @@ import { createPipeHandlers } from 'dismatch';
 const shapeOps = createPipeHandlers<Shape>('type');
 
 const getArea = shapeOps.match({
-  circle: ({ radius }) => (Math.PI * radius ** 2).toFixed(2), // calculate the area, then round in 2 decimal places
+  circle: ({ radius }) => Math.PI * radius ** 2,
   rectangle: ({ width, height }) => width * height,
 });
 
 const shapes: Shape[] = [{ type: 'circle', radius: 1 }, { type: 'rectangle', width: 2, height: 3 }]
 
-shapes.map(getArea); // Expect -> [3.14, 6]
+shapes.map(getArea); // Expect -> [3.14… , 6]
 
 // Payload support — pass extra context to every handler
 const volume = shapeOps.match<number, { depth: number }>({

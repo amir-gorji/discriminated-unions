@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.1.1] - 2026-04-08
+
+### Fixed
+
+- README now included in the published npm package (added to `files` in `package.json`)
+
 ## [1.1.0] - 2026-04-08
 
 ### Added

@@ -81,7 +81,7 @@ npm install dismatch
 | Maintenance                        | Active                  | Active     | Inactive       | Active            |
 | Beyond discriminated unions        | No                      | Yes        | No             | Yes               |
 
-`dismatch` is the complete discriminated union toolkit for TypeScript, in one tiny package.
+`dismatch` is the complete discriminated union toolkit for TypeScript, that's what makes it extremely powerful in this tiny field.
 
 ---
 
@@ -240,8 +240,10 @@ import { is } from 'dismatch';
 if (is(shape, 'circle')) {
   console.log(shape.radius); // narrowed
 }
+// Supposing only shape1 is a circle
+const shapes:Shape[] = [ shape1, shape2 ];
 
-const circles = shapes.filter((s) => is(s, 'circle'));
+const circles = shapes.filter((s) => is(s, 'circle')); // Expect -> [shape1]
 ```
 
 ### `isUnion`
@@ -266,11 +268,13 @@ import { createPipeHandlers } from 'dismatch';
 const shapeOps = createPipeHandlers<Shape>('type');
 
 const getArea = shapeOps.match({
-  circle: ({ radius }) => Math.PI * radius ** 2,
+  circle: ({ radius }) => (Math.PI * radius ** 2).toFixed(2), // calculate the area, then round in 2 decimal places
   rectangle: ({ width, height }) => width * height,
 });
 
-shapes.map(getArea); // no wrapper lambdas
+const shapes: Shape[] = [{ type: 'circle', radius: 1 }, { type: 'rectangle', width: 2, height: 3 }]
+
+shapes.map(getArea); // Expect -> [3.14, 6]
 
 // Payload support — pass extra context to every handler
 const volume = shapeOps.match<number, { depth: number }>({

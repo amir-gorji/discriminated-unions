@@ -187,6 +187,8 @@ const stats = Result.fold(results, { oks: 0, errors: 0, loadings: 0 })({
   error: (acc) => ({ ...acc, errors: acc.errors + 1 }),
   loading: (acc) => ({ ...acc, loadings: acc.loadings + 1 }),
 });
+// Expect stats = { circles: 2, totalArea: 416.699 }
+
 ```
 
 ### 5. Metadata

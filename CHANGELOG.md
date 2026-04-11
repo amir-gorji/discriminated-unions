@@ -31,7 +31,7 @@ Migration:
 
 ### Changed
 
-- Standalone `is()` collapsed to 2 typed value-first overloads plus an untyped fallback — no runtime arity-based disambiguation. `is('foo', 'kind')` (arity 2 with two strings) is unambiguously **value-first**: `'foo'` is the value, `'kind'` is the discriminant key.
+- Standalone `is()` collapsed to 2 typed value-first overloads plus an untyped fallback — no runtime arity-based disambiguation. `is(value, 'circle')` (arity 2 with two strings) is unambiguously **value-first**: first arg is the value, second is the variant name. Custom discriminant is the optional third arg: `is(value, 'circle', 'kind')`.
 - `hasVariant` helper tightened to accept `string | readonly string[]` directly — eliminates per-call allocation on the single-variant hot path (previously wrapped via `toArray`).
 - `UnionFactory.count` and `UnionFactory.partition` types are curried (`(variants) => (items) => result`) to match the runtime spread from `createPipeHandlers`.
 - `partition` widened to accept a single variant or an array, mirroring `count`.

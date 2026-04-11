@@ -373,6 +373,7 @@ export function count<
   const keys = toArray(variants) as readonly string[];
   let n = 0;
   for (const item of items) {
+    ensureUnion(item, discriminant, count);
     if (keys.includes(item[discriminant] as string)) n++;
   }
   return n;
@@ -410,6 +411,7 @@ export function partition<
   const matched: any[] = [];
   const rest: any[] = [];
   for (const item of items) {
+    ensureUnion(item, discriminant, partition);
     if (keys.includes(item[discriminant] as string)) {
       matched.push(item);
     } else {

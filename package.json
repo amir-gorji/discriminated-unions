@@ -1,7 +1,7 @@
 {
   "name": "dismatch",
   "description": "A lightweight discriminated unions library for TypeScript",
-  "version": "1.1.1",
+  "version": "2.0.0",
   "main": "lib/index.js",
   "module": "lib/index.mjs",
   "types": "lib/index.d.ts",
@@ -30,6 +30,7 @@
     "lib",
     "README.md"
   ],
+  "readme": "README.md",
   "author": "Amir Gorji",
   "license": "MIT",
   "scripts": {
@@ -38,6 +39,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:package": "node ./scripts/verify-package.mjs",
+    "size": "node ./scripts/measure-size.mjs",
+    "bench": "node ./scripts/bench.mjs",
     "ts:ci": "tsc",
     "ts:package": "tsc -p tsconfig.published.json",
     "ts:watch": "tsc --watch",
@@ -49,6 +52,7 @@
     "url": "git+https://github.com/amir-gorji/dismatch.git"
   },
   "devDependencies": {
+    "esbuild": "^0.27.0",
     "tsup": "^8.5.1",
     "typescript": "^5.9.3",
     "vitest": "^4.0.18"

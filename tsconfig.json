@@ -8,8 +8,9 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
-    "noEmit": true
+    "noEmit": true,
+    "types": ["vitest/globals"]
   },
   "include": ["src/**/*"],
-  "exclude": ["node_modules", "**/__tests__/*", "src/playground.ts"]
+  "exclude": ["node_modules", "src/playground.ts"]
 }

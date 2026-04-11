@@ -8,11 +8,12 @@
  * Demonstrates:
  *   - createPipeHandlers for handlers-first currying
  *   - Composing match + map steps in a pipeline
- *   - Array.map / Array.filter without boilerplate
+ *   - count and partition for collection summaries
+ *   - is() value-first narrowing + shapeOps.is(...) for filter composition
  *   - A minimal pipe() helper (drop-in compatible with fp-ts, ramda, etc.)
  */
 
-import { createPipeHandlers, is } from 'dismatch';
+import { createPipeHandlers, count, partition, is } from 'dismatch';
 
 // ── A tiny pipe() — swap this for fp-ts/function pipe if you use it ──────────
 
@@ -36,8 +37,6 @@ type Shape =
   | { type: 'rectangle'; width: number; height: number }
   | { type: 'triangle'; base: number; height: number };
 
-// ── Domain: normalised report ─────────────────────────────────────────────────
-
 interface ShapeReport {
   name: string;
   area: number;
@@ -48,9 +47,6 @@ interface ShapeReport {
 // ── Handler factory — bound to 'type' once ────────────────────────────────────
 
 const shapeOps = createPipeHandlers<Shape, 'type'>('type');
-
-// Each call to shapeOps.match / shapeOps.map returns a
-// `(shape: Shape) => T` function — ready for pipe / array methods.
 
 const getName = shapeOps.match({
   circle: () => 'Circle',
@@ -76,9 +72,6 @@ const getPerimeter = shapeOps.match({
 
 /**
  * Normalise all dimensions to absolute values without touching other variants.
- *
- * map() handlers receive the variant payload fields and return transformed data.
- * The discriminant is re-injected automatically by the runtime.
  */
 const normalise = shapeOps.map({
   circle: ({ radius }) => ({ radius: Math.abs(radius) }),
@@ -98,7 +91,7 @@ function buildReport(raw: Shape): ShapeReport {
   return pipe(
     raw,
     normalise, // ensure positive dimensions
-    (shape) => ({
+    (shape): ShapeReport => ({
       name: getName(shape),
       area: getArea(shape),
       perimeter: getPerimeter(shape),
@@ -117,26 +110,47 @@ const catalog: Shape[] = [
   { type: 'rectangle', width: 10, height: 2 },
 ];
 
-// Apply the full pipeline to every shape — getArea is a plain function reference
 const reports: ShapeReport[] = catalog.map(buildReport);
 
-// Filter using is() — no wrapper, correct inferred type
-const circles = catalog.filter((s) => is(s, 'circle'));
-//    ^? Circle[]
+// ── Collection helpers — count + partition ────────────────────────────────────
 
-const circleAreas = circles.map(getArea);
+// count() — single-pass tally without intermediate arrays
+const totalCircles = count(catalog, 'circle');
+const totalRoundOrAxisAligned = count(catalog, ['circle', 'rectangle']);
 
-// Sort shapes by area descending — again, getArea slots in directly
-const byAreaDesc = [...catalog]
-  .map(normalise)
-  .sort((a, b) => getArea(b) - getArea(a));
+// partition() — split into matched and rest in one pass
+const [circles, nonCircles] = partition(catalog, 'circle');
+//      ^? Circle[]            ^? (Rectangle | Triangle)[]
+
+// curried bound forms via createPipeHandlers
+const countTriangles = shapeOps.count('triangle');
+const splitRectangles = shapeOps.partition('rectangle');
+const triangleTally = countTriangles(catalog);
+const [rectangles, otherShapes] = splitRectangles(catalog);
+
+// ── is() — value-first narrowing + shapeOps.is(...) for .filter() ────────────
+
+const someShape: Shape = catalog[0];
+
+// value-first single variant — narrows inside the if block
+if (is(someShape, 'circle')) {
+  someShape.radius; // Circle
+}
+
+// value-first multi variant — narrows to a sub-union
+if (is(someShape, ['circle', 'rectangle'])) {
+  // someShape: Circle | Rectangle
+}
+
+// shapeOps.is — variant-first, slots into .filter() with full inference
+// and zero call-site generics, since Shape/'type' were bound once above.
+const justCircles = catalog.filter(shapeOps.is('circle'));
+//                                      ^? Circle[]
+
+const roundOrAxisAligned = catalog.filter(shapeOps.is(['circle', 'rectangle']));
+//                                              ^? (Circle | Rectangle)[]
 
 // ── Multiple handler sets on the same factory ─────────────────────────────────
-
-/**
- * Different teams / modules can define their own handler sets using the same
- * shapeOps instance — handlers are just plain objects, no coupling.
- */
 
 const getShortLabel = shapeOps.match({
   circle: ({ radius }) => `⬤ r=${radius}`,
@@ -149,6 +163,13 @@ const getColor = shapeOps.matchWithDefault({
   Default: () => '#f7a24f', // orange for everything else
 });
 
-console.log(reports.map((r) => `${r.name}: area=${r.area.toFixed(2)}`));
-console.log(catalog.map(getShortLabel));
-console.log(catalog.map(getColor));
+console.log('reports:', reports.map((r) => `${r.name}: area=${r.area.toFixed(2)}`));
+console.log('labels:', catalog.map(getShortLabel));
+console.log('colors:', catalog.map(getColor));
+console.log(`circles in catalog: ${totalCircles}`);
+console.log(`circle+rectangle count: ${totalRoundOrAxisAligned}`);
+console.log(`triangle count: ${triangleTally}`);
+console.log(`partition circles: ${circles.length} matched, ${nonCircles.length} rest`);
+console.log(`partition rectangles: ${rectangles.length} matched, ${otherShapes.length} rest`);
+console.log(`filtered circles via is(): ${justCircles.length}`);
+console.log(`filtered round/axis via is([]): ${roundOrAxisAligned.length}`);

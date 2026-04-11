@@ -1,4 +1,3 @@
-import { clearStackTrace } from './helpers';
 import {
   Folder,
   InferUnionFromSchema,
@@ -11,6 +10,68 @@ import {
   UnionSchema,
   UnionFactory,
 } from './types';
+
+declare global {
+  interface ErrorConstructor {
+    captureStackTrace?: (
+      targetObject: object,
+      constructorOpt?: Function,
+    ) => void;
+  }
+}
+
+// ── Internal helpers ───────────────────────────────────────────────────────
+
+function fail(message: string, caller: Function): never {
+  const err = new Error(message);
+  Error.captureStackTrace?.(err, caller);
+  throw err;
+}
+
+function ensureUnion(
+  input: unknown,
+  discriminant: PropertyKey,
+  caller: Function,
+): void {
+  if (!isUnion(input, discriminant)) fail('Not a union', caller);
+}
+
+function toArray<T>(value: T | readonly T[]): readonly T[] {
+  return Array.isArray(value) ? value : [value as T];
+}
+
+function hasVariant(
+  input: unknown,
+  variants: string | readonly string[],
+  discriminant: PropertyKey,
+): boolean {
+  if (!isUnion(input, discriminant)) return false;
+  const v = (input as any)[discriminant] as string;
+  return typeof variants === 'string' ? v === variants : variants.includes(v);
+}
+
+function dispatch<
+  T extends SampleUnion<Discriminant>,
+  Result,
+  Discriminant extends PropertyKey,
+  Payload extends any = never,
+>(
+  union: T,
+  handlers: Record<
+    string,
+    ((input: any, payload: Payload) => Result) | undefined
+  >,
+  discriminant: Discriminant,
+  fallback?: (payload: Payload) => Result,
+  payload?: Payload,
+): Result {
+  const fn = handlers[union[discriminant] as string];
+  if (fn) return fn(union, payload!);
+  if (fallback) return fallback(payload!);
+  return fail('No handler', dispatch);
+}
+
+// ── Public API ─────────────────────────────────────────────────────────────
 
 /**
  * Checks whether a value is a valid discriminated union — a non-null, non-array
@@ -41,79 +102,57 @@ export function isUnion<Discriminant extends PropertyKey>(
 }
 
 /**
- * Type guard that narrows a discriminated union to a specific variant.
- * Invalid inputs return `false`.
+ * Value-first type guard for discriminated unions. Narrows inside `if` blocks.
+ *
+ * ```ts
+ * if (is(shape, 'circle')) shape.radius;              // single variant
+ * if (is(shape, ['circle', 'rectangle'])) shape;      // sub-union
+ * is(event, ['click', 'keydown'], 'kind');            // custom discriminant
+ * ```
+ *
+ * For `.filter()` and pipe composition, use `createPipeHandlers(...).is(...)`,
+ * which binds the union type once and needs no generics at call sites.
  *
  * @param union - The discriminated union value to check
- * @param type - The variant value to match against
+ * @param variants - A single variant name, or an array of variant names
  * @param discriminant - The property used to tell variants apart. Defaults to `'type'`.
- * @returns `true` if the discriminant property equals `type`, narrowing to that variant
- *
- * @example
- * ```ts
- * if (is(shape, 'circle')) {
- *   console.log(shape.radius); // TypeScript knows it's a circle
- * }
- * ```
  */
+// Multi variant — must precede single so `is(x, ['a','b'])` binds here
 export function is<
   T extends SampleUnion<Discriminant>,
   U extends T[Discriminant],
   Discriminant extends PropertyKey = 'type',
 >(
   union: T,
-  type: U,
+  variants: readonly U[],
   discriminant?: Discriminant,
 ): union is Extract<T, { [K in Discriminant]: U }>;
 
-export function is<Discriminant extends PropertyKey = 'type'>(
-  union: unknown,
-  type: string,
+// Single variant
+export function is<
+  T extends SampleUnion<Discriminant>,
+  U extends T[Discriminant],
+  Discriminant extends PropertyKey = 'type',
+>(
+  union: T,
+  variant: U,
   discriminant?: Discriminant,
+): union is Extract<T, { [K in Discriminant]: U }>;
+
+// Untyped fallback — plain boolean when the call can't be proven typesafe
+// (e.g. tests, runtime validation of external data)
+export function is(
+  union: unknown,
+  variants: string | readonly string[],
+  discriminant?: PropertyKey,
 ): boolean;
 
 export function is(
   union: unknown,
-  type: string,
+  variants: string | readonly string[],
   discriminant: PropertyKey = 'type',
 ): boolean {
-  return isUnion(union, discriminant) && union[discriminant] === type;
-}
-
-function dispatch<
-  T extends SampleUnion<Discriminant>,
-  Result,
-  Discriminant extends PropertyKey,
-  Payload extends any = never,
->(
-  union: T,
-  handlers: Record<
-    string,
-    ((input: any, payload: Payload) => Result) | undefined
-  >,
-  discriminant: Discriminant,
-  fallback?: (payload: Payload) => Result,
-  payload?: Payload,
-): Result {
-  const fn = handlers[union[discriminant] as string];
-  if (fn) return fn(union, payload!);
-  if (fallback) return fallback(payload!);
-  throw new Error('No handler');
-}
-
-function guard<T>(
-  input: unknown,
-  discriminant: PropertyKey,
-  caller: Function,
-  fn: () => T,
-): T {
-  try {
-    if (!isUnion(input, discriminant))
-      throw new Error('Not a union');
-    return fn();
-  } catch (err) {
-    throw clearStackTrace(err, caller);
-  }
+  return hasVariant(union, variants, discriminant);
 }
 
 /**
@@ -141,23 +180,19 @@ export function map<
   discriminant: Discriminant = 'type' as Discriminant,
   payload?: Payload,
 ): (mapper: Mapper<T, Discriminant, Payload>) => T {
-  return guard(
-    input,
-    discriminant,
-    map,
-    () => (mapper: Mapper<T, Discriminant, Payload>) => {
-      const result = dispatch(
-        input,
-        mapper as unknown as Record<string, ((input: any, payload: Payload) => T) | undefined>,
-        discriminant,
-        () => input,
-        payload,
-      );
-      return result === input
-        ? result
-        : { ...result, [discriminant]: input[discriminant] };
-    },
-  );
+  ensureUnion(input, discriminant, map);
+  return (mapper) => {
+    const result = dispatch(
+      input,
+      mapper as unknown as Record<string, ((input: any, payload: Payload) => T) | undefined>,
+      discriminant,
+      () => input,
+      payload,
+    );
+    return result === input
+      ? result
+      : { ...result, [discriminant]: input[discriminant] };
+  };
 }
 
 /**
@@ -185,21 +220,17 @@ export function mapAll<
   discriminant: Discriminant = 'type' as Discriminant,
   payload?: Payload,
 ): (mapper: MapperAll<T, Discriminant, Payload>) => T {
-  return guard(
-    input,
-    discriminant,
-    mapAll,
-    () => (mapper: MapperAll<T, Discriminant, Payload>) => {
-      const result = dispatch(
-        input,
-        mapper as unknown as Record<string, (input: any, payload: Payload) => T>,
-        discriminant,
-        undefined,
-        payload,
-      );
-      return { ...result, [discriminant]: input[discriminant] };
-    },
-  );
+  ensureUnion(input, discriminant, mapAll);
+  return (mapper) => ({
+    ...dispatch(
+      input,
+      mapper as unknown as Record<string, (input: any, payload: Payload) => T>,
+      discriminant,
+      undefined,
+      payload,
+    ),
+    [discriminant]: input[discriminant],
+  });
 }
 
 /**
@@ -228,20 +259,15 @@ export function match<
   discriminant: Discriminant = 'type' as Discriminant,
   payload?: Payload,
 ): <Result>(mapper: Matcher<T, Result, Discriminant, Payload>) => Result {
-  return guard(
-    input,
-    discriminant,
-    match,
-    () =>
-      <Result>(matcher: Matcher<T, Result, Discriminant, Payload>) =>
-        dispatch<T, Result, Discriminant, Payload>(
-          input,
-          matcher as unknown as Record<string, (input: any, payload: Payload) => Result>,
-          discriminant,
-          undefined,
-          payload,
-        ),
-  );
+  ensureUnion(input, discriminant, match);
+  return <Result>(matcher: Matcher<T, Result, Discriminant, Payload>) =>
+    dispatch<T, Result, Discriminant, Payload>(
+      input,
+      matcher as unknown as Record<string, (input: any, payload: Payload) => Result>,
+      discriminant,
+      undefined,
+      payload,
+    );
 }
 
 /**
@@ -269,77 +295,15 @@ export function matchWithDefault<
   discriminant: Discriminant = 'type' as Discriminant,
   payload?: Payload,
 ): <U>(matcher: MatcherWithDefault<T, U, Discriminant, Payload>) => U {
-  return guard(
-    input,
-    discriminant,
-    matchWithDefault,
-    () =>
-      <U>(matcher: MatcherWithDefault<T, U, Discriminant, Payload>) =>
-        dispatch<T, U, Discriminant, Payload>(
-          input,
-          matcher as unknown as Record<string, (input: any, payload: Payload) => U>,
-          discriminant,
-          matcher.Default,
-          payload,
-        ),
-  );
-}
-
-/**
- * Multi-variant type predicate that narrows a discriminated union to a sub-union.
- *
- * **Value-first** (for if-blocks): pass the union value and variant keys.
- * **Keys-first** (predicate factory): pass only variant keys to get a reusable predicate for `.filter()`.
- *
- * @example
- * ```ts
- * // Value-first — narrows inside if-blocks
- * if (narrow(notification, ['email', 'push'])) {
- *   notification; // EmailNotification | PushNotification
- * }
- *
- * // Keys-first — predicate factory for .filter()
- * const digital = notifications.filter(narrow(['email', 'push']));
- * ```
- */
-export function narrow<
-  T extends SampleUnion<Discriminant>,
-  U extends T[Discriminant],
-  Discriminant extends PropertyKey = 'type',
->(
-  union: T,
-  variants: readonly U[],
-  discriminant?: Discriminant,
-): union is Extract<T, { [K in Discriminant]: U }>;
-
-export function narrow<
-  T extends SampleUnion<Discriminant>,
-  U extends T[Discriminant],
-  Discriminant extends PropertyKey = 'type',
->(
-  variants: readonly U[],
-  discriminant?: Discriminant,
-): (union: T) => union is Extract<T, { [K in Discriminant]: U }>;
-
-export function narrow(
-  unionOrVariants: unknown,
-  variantsOrDiscriminant?: readonly string[] | PropertyKey,
-  maybeDiscriminant?: PropertyKey,
-): any {
-  if (Array.isArray(unionOrVariants)) {
-    const variants = unionOrVariants as readonly string[];
-    const discriminant = (variantsOrDiscriminant ?? 'type') as PropertyKey;
-    return (input: unknown) =>
-      isUnion(input, discriminant) &&
-      variants.includes((input as any)[discriminant]);
-  }
-  const union = unionOrVariants;
-  const variants = variantsOrDiscriminant as readonly string[];
-  const discriminant = (maybeDiscriminant ?? 'type') as PropertyKey;
-  return (
-    isUnion(union, discriminant) &&
-    variants.includes((union as any)[discriminant])
-  );
+  ensureUnion(input, discriminant, matchWithDefault);
+  return <U>(matcher: MatcherWithDefault<T, U, Discriminant, Payload>) =>
+    dispatch<T, U, Discriminant, Payload>(
+      input,
+      matcher as unknown as Record<string, (input: any, payload: Payload) => U>,
+      discriminant,
+      matcher.Default,
+      payload,
+    );
 }
 
 /**
@@ -372,17 +336,90 @@ export function fold<
   return (handlers) => {
     let acc = initial;
     for (const item of items) {
+      ensureUnion(item, discriminant, fold);
       const key = item[discriminant] as string;
       const handler = (
         handlers as Record<string, ((acc: Acc, input: any) => Acc) | undefined>
       )[key];
-      if (!handler) {
-        throw clearStackTrace(new Error('No handler'), fold);
-      }
+      if (!handler) fail('No handler', fold);
       acc = handler(acc, item);
     }
     return acc;
   };
+}
+
+/**
+ * Counts how many items in a collection match the given variant(s).
+ * Single-pass, no intermediate array allocation.
+ *
+ * @param items - The array of discriminated union values
+ * @param variants - A single variant name or array of variant names to count
+ * @param discriminant - The property used to tell variants apart. Defaults to `'type'`.
+ * @returns The number of matching items
+ *
+ * @example
+ * ```ts
+ * count(notifications, 'ACTION_NEEDED');         // 3
+ * count(notifications, ['ACTION_NEEDED', 'NEW']); // 5
+ * ```
+ */
+export function count<
+  T extends SampleUnion<Discriminant>,
+  Discriminant extends PropertyKey = 'type',
+>(
+  items: readonly T[],
+  variants: T[Discriminant] | readonly T[Discriminant][],
+  discriminant: Discriminant = 'type' as Discriminant,
+): number {
+  const keys = toArray(variants) as readonly string[];
+  let n = 0;
+  for (const item of items) {
+    ensureUnion(item, discriminant, count);
+    if (keys.includes(item[discriminant] as string)) n++;
+  }
+  return n;
+}
+
+/**
+ * Splits a collection of discriminated union values into two arrays:
+ * items matching the given variant(s) and the rest.
+ * Single-pass with fully narrowed tuple types.
+ *
+ * @param items - The array of discriminated union values
+ * @param variants - A single variant name or array of variant names to match
+ * @param discriminant - The property used to tell variants apart. Defaults to `'type'`.
+ * @returns A tuple `[matched, rest]` with narrowed types
+ *
+ * @example
+ * ```ts
+ * const [circles, rest] = partition(shapes, 'circle');
+ * const [actionNeeded, rest] = partition(notifications, ['ACTION_NEEDED']);
+ * ```
+ */
+export function partition<
+  T extends SampleUnion<Discriminant>,
+  Discriminant extends PropertyKey = 'type',
+  U extends T[Discriminant] = T[Discriminant],
+>(
+  items: readonly T[],
+  variants: U | readonly U[],
+  discriminant: Discriminant = 'type' as Discriminant,
+): [
+  Extract<T, { [K in Discriminant]: U }>[],
+  Exclude<T, { [K in Discriminant]: U }>[],
+] {
+  const keys = toArray(variants) as readonly string[];
+  const matched: any[] = [];
+  const rest: any[] = [];
+  for (const item of items) {
+    ensureUnion(item, discriminant, partition);
+    if (keys.includes(item[discriminant] as string)) {
+      matched.push(item);
+    } else {
+      rest.push(item);
+    }
+  }
+  return [matched, rest];
 }
 
 /**
@@ -391,8 +428,9 @@ export function fold<
  * making them composable inside FP `pipe` utilities without wrapper lambdas.
  *
  * @param discriminant - The property used to tell variants apart (e.g. `'type'` or `'kind'`)
- * @returns An object with four methods — `match`, `matchWithDefault`, `map`, `mapAll` —
- *   each accepting handlers first and returning a reusable function that accepts the input value
+ * @returns An object with handler-first utilities including `match`, `matchWithDefault`,
+ *   `map`, `mapAll`, `fold`, `count`, `partition`, and `is` — each returning a reusable
+ *   function that accepts the input value
  *
  * @example
  * ```ts
@@ -407,6 +445,10 @@ export function fold<
  *
  * // or compose inside a pipe:
  * pipe(shape, shapeOps.match(handlers));
+ *
+ * // variant-first type guard — no generics needed at call site:
+ * shapes.filter(shapeOps.is('circle'));                // Circle[]
+ * shapes.filter(shapeOps.is(['circle', 'rectangle'])); // (Circle | Rectangle)[]
  * ```
  */
 export function createPipeHandlers<
@@ -458,15 +500,32 @@ export function createPipeHandlers<
       ): T =>
         mapAll(inputs[0], discriminant, inputs[1])(handlers),
 
-    narrow:
-      <U extends T[Discriminant]>(variants: readonly U[]) =>
-      (union: T): union is Extract<T, { [K in Discriminant]: U }> =>
-        narrow(union, variants, discriminant),
-
     fold:
       <Acc>(items: readonly T[], initial: Acc) =>
       (handlers: Folder<T, Acc, Discriminant>): Acc =>
         fold(items, initial, discriminant)(handlers),
+
+    count:
+      (variants: T[Discriminant] | readonly T[Discriminant][]) =>
+      (items: readonly T[]): number =>
+        count(items, variants, discriminant),
+
+    partition:
+      <U extends T[Discriminant]>(variants: U | readonly U[]) =>
+      (items: readonly T[]): [
+        Extract<T, { [K in Discriminant]: U }>[],
+        Exclude<T, { [K in Discriminant]: U }>[],
+      ] =>
+        partition(items, variants, discriminant),
+
+    is:
+      <U extends T[Discriminant]>(variants: U | readonly U[]) =>
+      (input: T): input is Extract<T, { [K in Discriminant]: U }> =>
+        hasVariant(
+          input,
+          variants as string | readonly string[],
+          discriminant,
+        ),
   };
 }
 
@@ -493,8 +552,8 @@ export function createPipeHandlers<
  * type Shape = InferUnion<typeof Shape>;
  *
  * Shape.circle(5)                   // { type: 'circle', radius: 5 }
- * Shape.is.circle(x)               // narrows x to circle variant
- * Shape.isKnown(x)                 // true if x.type is a declared variant
+ * shapes.filter(Shape.is('circle')) // curried predicate — Circle[]
+ * Shape.isKnown(x)                  // true if x.type is a declared variant
  *
  * const getArea = Shape.match({
  *   circle:    ({ radius })        => Math.PI * radius ** 2,
@@ -512,22 +571,18 @@ export function createUnion<
   const keys = Object.keys(schema) as (keyof Schema & string)[];
 
   const constructors: any = {};
-  const guards: any = {};
 
   for (const key of keys) {
     constructors[key] = (...args: any[]) => ({
       ...schema[key](...args),
       [discriminant]: key,
     });
-    guards[key] = (x: unknown): boolean =>
-      isUnion(x, discriminant) && (x as any)[discriminant] === key;
   }
 
   return Object.assign(constructors, {
-    is: guards,
+    ...createPipeHandlers<Union, any>(discriminant as any),
     isKnown: (x: unknown): boolean =>
       isUnion(x, discriminant) && (x as any)[discriminant] in schema,
-    ...createPipeHandlers<Union, any>(discriminant as any),
     variants: Object.freeze(keys) as ReadonlyArray<keyof Schema & string>,
     discriminant,
   });

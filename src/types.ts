@@ -258,11 +258,11 @@ export type UnionFactory<D extends string, Schema extends UnionSchema<D>> = {
     ...args: Parameters<Schema[K]>
   ) => Prettify<Omit<ReturnType<Schema[K]>, D> & { [Disc in D]: K }>;
 } & {
-  readonly is: {
-    [K in keyof Schema & string]: (
-      x: unknown,
-    ) => x is ReturnType<Schema[K]> & { [Disc in D]: K };
-  };
+  readonly is: <U extends keyof Schema & string>(
+    variants: U | readonly U[],
+  ) => (
+    input: InferUnionFromSchema<D, Schema>,
+  ) => input is Extract<InferUnionFromSchema<D, Schema>, { [Disc in D]: U }>;
   readonly isKnown: (x: unknown) => x is InferUnionFromSchema<D, Schema>;
   readonly match: <U, Payload extends any = never>(
     handlers: Matcher<InferUnionFromSchema<D, Schema>, U, D, Payload>,
@@ -297,18 +297,25 @@ export type UnionFactory<D extends string, Schema extends UnionSchema<D>> = {
       ? [input: InferUnionFromSchema<D, Schema>]
       : [input: InferUnionFromSchema<D, Schema>, payload: Payload]
   ) => InferUnionFromSchema<D, Schema>;
-  readonly narrow: <Keys extends ReadonlyArray<keyof Schema & string>>(
-    keys: Keys,
-  ) => (
-    x: unknown,
-  ) => x is Extract<
-    InferUnionFromSchema<D, Schema>,
-    { [Disc in D]: Keys[number] }
-  >;
   readonly fold: <Acc>(
     items: ReadonlyArray<InferUnionFromSchema<D, Schema>>,
     initial: Acc,
   ) => (handlers: Folder<InferUnionFromSchema<D, Schema>, Acc, D>) => Acc;
+  readonly count: (
+    variants:
+      | (keyof Schema & string)
+      | ReadonlyArray<keyof Schema & string>,
+  ) => (items: ReadonlyArray<InferUnionFromSchema<D, Schema>>) => number;
+  readonly partition: <
+    U extends keyof Schema & string = keyof Schema & string,
+  >(
+    variants: U | readonly U[],
+  ) => (
+    items: ReadonlyArray<InferUnionFromSchema<D, Schema>>,
+  ) => [
+    Extract<InferUnionFromSchema<D, Schema>, { [Disc in D]: U }>[],
+    Exclude<InferUnionFromSchema<D, Schema>, { [Disc in D]: U }>[],
+  ];
   readonly variants: ReadonlyArray<keyof Schema & string>;
   readonly discriminant: D;
   readonly _union: InferUnionFromSchema<D, Schema>;

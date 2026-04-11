@@ -336,6 +336,7 @@ export function fold<
   return (handlers) => {
     let acc = initial;
     for (const item of items) {
+      ensureUnion(item, discriminant, fold);
       const key = item[discriminant] as string;
       const handler = (
         handlers as Record<string, ((acc: Acc, input: any) => Acc) | undefined>

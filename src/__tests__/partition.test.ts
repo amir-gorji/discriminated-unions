@@ -17,8 +17,14 @@ const triangle: Shape = { type: 'triangle', base: 3, height: 7 };
 const shapes: Shape[] = [circle, rectangle, triangle, circle];
 
 describe('partition', () => {
-  it('should split by single variant', () => {
+  it('should split by single variant (array form)', () => {
     const [circles, rest] = partition(shapes, ['circle']);
+    expect(circles).toEqual([circle, circle]);
+    expect(rest).toEqual([rectangle, triangle]);
+  });
+
+  it('should split by single variant (string form)', () => {
+    const [circles, rest] = partition(shapes, 'circle');
     expect(circles).toEqual([circle, circle]);
     expect(rest).toEqual([rectangle, triangle]);
   });

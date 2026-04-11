@@ -11,6 +11,7 @@ const pkg = JSON.parse(
 );
 
 const expectedExports = [
+  'count',
   'createPipeHandlers',
   'createUnion',
   'fold',
@@ -20,7 +21,7 @@ const expectedExports = [
   'mapAll',
   'match',
   'matchWithDefault',
-  'narrow',
+  'partition',
 ].sort();
 
 const requiredFiles = [

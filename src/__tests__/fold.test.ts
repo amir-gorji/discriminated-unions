@@ -87,8 +87,8 @@ describe('fold — standalone', () => {
   it('should throw when a handler is missing', () => {
     expect(() =>
       fold([{ type: 'circle', radius: 5 } as Shape], 0)({
-        rectangle: (acc) => acc,
-        triangle: (acc) => acc,
+        rectangle: (acc: number) => acc,
+        triangle: (acc: number) => acc,
       } as any),
     ).toThrow('No handler');
   });

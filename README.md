@@ -4,7 +4,7 @@
 [![license](https://img.shields.io/npm/l/dismatch)](./LICENSE)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue)](https://www.typescriptlang.org/)
 
-Type-safe discriminated unions for TypeScript. Define once, get constructors, type guards, and exhaustive pattern matching — all from a single schema. Zero dependencies. ~1.7 kB minified.
+Type-safe discriminated unions for TypeScript. Define once, get constructors, type guards, and exhaustive pattern matching — all from a single schema. Zero dependencies. ~2 kB minified.
 
 ```ts
 import { createUnion, type InferUnion } from 'dismatch';
@@ -44,9 +44,10 @@ area(Shape.circle(5)); // 78.54
   - [match](#match)
   - [matchWithDefault](#matchwithdefault)
   - [map / mapAll](#map--mapall)
-  - [narrow](#narrow)
-  - [fold](#fold)
   - [is](#is)
+  - [fold](#fold)
+  - [count](#count)
+  - [partition](#partition)
   - [isUnion](#isunion)
   - [createPipeHandlers](#createpipehandlers)
 - [Type Helpers](#type-helpers)
@@ -70,20 +71,21 @@ npm install dismatch
 
 `dismatch` is purpose-built only for discriminated unions in TypeScript.
 
-| Capability                         | dismatch                | ts-pattern | unionize       | @effect/match     |
-| ---------------------------------- | ----------------------- | ---------- | -------------- | ----------------- |
-| Bundle size                        | **~1.7 kB**             | ~2 kB      | unclear        | large (ecosystem) |
-| Zero dependencies                  | Yes                     | Yes        | Yes            | No                |
-| Exhaustive matching (compile time) | Yes                     | Yes        | Yes            | Yes               |
-| Schema-aware runtime validation    | **Yes**                 | No         | No             | No                |
-| Multi-variant narrowing (`narrow`) | **Yes**                 | No         | No             | No                |
-| Collection folding (`fold`)        | **Yes**                 | No         | No             | No                |
-| Partial transforms (`map`)         | **Yes**                 | No         | No             | No                |
-| Clean stack traces                 | **Yes**                 | No         | No             | No                |
-| Payload to handlers                | **Yes**                 | No         | No             | No                |
-| Single-schema union toolkit        | **Yes** (`createUnion`) | No         | Yes (inactive) | No                |
-| Maintenance                        | Active                  | Active     | Inactive       | Active            |
-| Beyond discriminated unions        | No                      | Yes        | No             | Yes               |
+| Capability                                | dismatch                | ts-pattern | unionize       | @effect/match     |
+| ----------------------------------------- | ----------------------- | ---------- | -------------- | ----------------- |
+| Bundle size                               | **~2 kB**               | ~2 kB      | unclear        | large (ecosystem) |
+| Zero dependencies                         | Yes                     | Yes        | Yes            | No                |
+| Exhaustive matching (compile time)        | Yes                     | Yes        | Yes            | Yes               |
+| Schema-aware runtime validation           | **Yes**                 | No         | No             | No                |
+| Single + multi-variant narrowing (`is`)   | **Yes**                 | No         | No             | No                |
+| Collection folding (`fold`)               | **Yes**                 | No         | No             | No                |
+| Collection counters (`count`/`partition`) | **Yes**                 | No         | No             | No                |
+| Partial transforms (`map`)                | **Yes**                 | No         | No             | No                |
+| Clean stack traces                        | **Yes**                 | No         | No             | No                |
+| Payload to handlers                       | **Yes**                 | No         | No             | No                |
+| Single-schema union toolkit               | **Yes** (`createUnion`) | No         | Yes (inactive) | No                |
+| Maintenance                               | Active                  | Active     | Inactive       | Active            |
+| Beyond discriminated unions               | No                      | Yes        | No             | Yes               |
 
 `dismatch` is the most complete discriminated union toolkit in TypeScript with rare features.
 
@@ -135,18 +137,24 @@ Result.isKnown(apiResponse); // true if type is 'ok' | 'error' | 'loading'
 Result.isKnown({ type: 'unknown' }); // false
 ```
 
-`narrow` creates a predicate that narrows to a sub-union of multiple variants:
+For multi-variant narrowing — to a sub-union of two or more variants — use the standalone `is()` inside `if` blocks, or `createPipeHandlers(...).is(...)` for `.filter()` composition without call-site generics:
 
 ```ts
+import { is, createPipeHandlers } from 'dismatch';
+
+const resultOps = createPipeHandlers<Result, 'type'>('type');
+
 const results: Result[] = [
   Result.ok('hi'),
   Result.error('no'),
   Result.loading(),
 ];
 
-const settled = results.filter(Result.narrow(['ok', 'error']));
+const settled = results.filter(resultOps.is(['ok', 'error']));
 // settled: ({ type: 'ok'; data: string } | { type: 'error'; message: string })[]
 ```
+
+> The bound `Result.is.<variant>` helper is **deprecated**. The standalone `is()` is now strictly value-first — for predicate-factory use in `.filter()`, use [`createPipeHandlers(...).is(...)`](#createpipehandlers), which binds the union type once and needs no generics at call sites.
 
 ### 4. Pattern matching
 
@@ -256,31 +264,6 @@ const normalized = mapAll(shape)({
 });
 ```
 
-### `narrow`
-
-Multi-variant type predicate — narrows a union to a sub-union of specified variants. Two calling styles:
-
-```ts
-import { narrow } from 'dismatch';
-
-type Notification =
-  | { type: 'email'; subject: string }
-  | { type: 'sms'; body: string }
-  | { type: 'push'; title: string };
-
-// Value-first — for if-blocks
-if (narrow(notification, ['email', 'push'])) {
-  notification; // EmailNotification | PushNotification
-}
-
-// Keys-first — predicate factory for .filter()
-const digital = notifications.filter(narrow(['email', 'push']));
-// digital: (EmailNotification | PushNotification)[]
-
-// Custom discriminant
-narrow(event, ['click', 'keydown'], 'kind');
-```
-
 ### `fold`
 
 Exhaustive single-pass aggregator over a collection of discriminated union values. Each handler receives `(accumulator, variantData)` and returns the new accumulator. All variants must have handlers.
@@ -312,18 +295,72 @@ const stats = fold(shapes, { circles: 0, totalArea: 0 })({
 
 ### `is`
 
-Type guard that narrows a union to a specific variant.
+Value-first type guard for discriminated unions. Covers single-variant and multi-variant narrowing inside `if` blocks.
 
 ```ts
 import { is } from 'dismatch';
 
 if (is(shape, 'circle')) {
-  console.log(shape.radius); // narrowed
+  shape.radius; // narrowed to circle
 }
-// Supposing only shape1 is a circle
-const shapes: Shape[] = [shape1, shape2];
 
-const circles = shapes.filter((s) => is(s, 'circle')); // Expect -> [shape1]
+if (is(shape, ['circle', 'rectangle'])) {
+  shape; // narrowed to circle | rectangle
+}
+```
+
+**Custom discriminant:**
+
+```ts
+is(event, 'click', 'kind');
+is(event, ['click', 'keydown'], 'kind');
+```
+
+For `.filter()`, `.find()`, or pipe composition, use [`createPipeHandlers(...).is(...)`](#createpipehandlers) — variant-first and fully inferred without call-site generics.
+
+### `count`
+
+Counts how many items in a collection match the given variant(s). Single-pass, no intermediate array allocation.
+
+```ts
+import { count } from 'dismatch';
+
+type Notification =
+  | { type: 'NEW' }
+  | { type: 'ACTION_NEEDED' }
+  | { type: 'INFO' };
+
+const notifications: Notification[] = [
+  { type: 'NEW' },
+  { type: 'ACTION_NEEDED' },
+  { type: 'NEW' },
+  { type: 'INFO' },
+];
+
+count(notifications, 'NEW'); // 2
+count(notifications, ['NEW', 'ACTION_NEEDED']); // 3
+
+// Custom discriminant
+count(events, ['click', 'keydown'], 'kind');
+```
+
+### `partition`
+
+Splits a collection into two arrays — items matching the variant(s) and the rest — in one pass with fully narrowed types.
+
+```ts
+import { partition } from 'dismatch';
+
+const [circles, rest] = partition(shapes, 'circle');
+//      ^? Circle[]   ^? (Rectangle | Triangle)[]
+
+const [actionable, rest] = partition(notifications, [
+  'NEW',
+  'ACTION_NEEDED',
+]);
+
+// Custom discriminant
+const [clicks, others] = partition(events, 'click', 'kind');
 ```
 
 ### `isUnion`
@@ -340,7 +377,7 @@ isUnion({ kind: 'click' }, 'kind'); // true — custom discriminant
 
 ### `createPipeHandlers`
 
-Handlers-first curried order for pipe composition. Define handlers once, get back a reusable function.
+Handlers-first curried order for pipe composition. Define handlers once, get back a reusable function. Exposes `match`, `matchWithDefault`, `map`, `mapAll`, `fold`, `count`, `partition`, and `is` — all bound to the union type and discriminant, so no generics are needed at call sites.
 
 ```ts
 import { createPipeHandlers } from 'dismatch';
@@ -362,6 +399,13 @@ const shapes: Shape[] = [
 ];
 
 shapes.map(getArea); // Expect -> [3.14, 6]
+
+// Variant-first type guard — slots directly into .filter(), no generics needed
+const circles = shapes.filter(shapeOps.is('circle'));
+//    ^? Circle[]
+
+const round = shapes.filter(shapeOps.is(['circle', 'rectangle']));
+//    ^? (Circle | Rectangle)[]
 
 // Payload support — pass extra context to every handler
 const volume = shapeOps.match<number, { depth: number }>({

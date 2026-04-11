@@ -17,9 +17,9 @@ type Animal =
   | { kind: 'cat'; lives: number }
   | { kind: 'bird'; canFly: boolean };
 
-const circle: Shape = { type: 'circle', radius: 5 };
-const rectangle: Shape = { type: 'rectangle', width: 4, height: 6 };
-const triangle: Shape = { type: 'triangle', base: 10, height: 3 };
+const circle = { type: 'circle', radius: 5 } as Shape;
+const rectangle = { type: 'rectangle', width: 4, height: 6 } as Shape;
+const triangle = { type: 'triangle', base: 10, height: 3 } as Shape;
 
 describe('match', () => {
   const shapeMatcher = {
@@ -293,7 +293,7 @@ describe('mapAll', () => {
 
   it('should throw when a handler is missing at runtime', () => {
     expect(() =>
-      mapAll(rectangle)({ circle: (s) => s } as any),
+      mapAll(rectangle)({ circle: (s: any) => s } as any),
     ).toThrow('No handler');
   });
 
@@ -309,9 +309,9 @@ describe('mapAll', () => {
   });
 });
 
-const dog: Animal = { kind: 'dog', name: 'Rex' };
-const cat: Animal = { kind: 'cat', lives: 9 };
-const bird: Animal = { kind: 'bird', canFly: true };
+const dog = { kind: 'dog', name: 'Rex' } as Animal;
+const cat = { kind: 'cat', lives: 9 } as Animal;
+const bird = { kind: 'bird', canFly: true } as Animal;
 
 describe('match with custom discriminant', () => {
   const animalMatcher = {
@@ -408,9 +408,11 @@ describe('createPipeHandlers', () => {
   const animalOps = createPipeHandlers<Animal, 'kind'>('kind');
 
   const shapeMatcher = {
-    circle: ({ radius }) => Math.PI * radius ** 2,
-    rectangle: ({ width, height }) => width * height,
-    triangle: ({ base, height }) => (base * height) / 2,
+    circle: ({ radius }: { radius: number }) => Math.PI * radius ** 2,
+    rectangle: ({ width, height }: { width: number; height: number }) =>
+      width * height,
+    triangle: ({ base, height }: { base: number; height: number }) =>
+      (base * height) / 2,
   };
 
   describe('match', () => {

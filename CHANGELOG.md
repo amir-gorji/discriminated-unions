@@ -1,5 +1,65 @@
 # Changelog
 
+## [2.0.0] - 2026-04-11
+
+### Added
+
+- `count(items, variant | variants, discriminant?)` — single-pass tally of how many items in a collection match the given variant(s). No intermediate array allocation.
+- `partition(items, variant | variants, discriminant?)` — splits a collection into `[matched, rest]` in one pass with fully narrowed tuple types. Accepts a single variant or an array.
+- **Value-first multi-variant `is()`:** `is(value, ['a', 'b'])` — narrows to a sub-union inside `if` blocks. Supports a custom discriminant via the trailing argument (e.g. `is(value, ['click','keydown'], 'kind')`).
+- **`createPipeHandlers(...).is(...)`** — variant-first curried type guard, returns `(input) => input is Extract<...>`. Binds the union type and discriminant at factory construction, so `.filter(ops.is('circle'))` narrows to `Circle[]` with zero call-site generics.
+- `createPipeHandlers().count` and `createPipeHandlers().partition` curried bound forms.
+- `createUnion().count` and `createUnion().partition` (via `createPipeHandlers`).
+- `count` and `partition` test suites; new `is()` disambiguation regression tests.
+- Test files are now type-checked under `tsc --noEmit` (removed from `tsconfig.json` exclude list) so future test-side type drift is caught at the release gate.
+
+### Removed (BREAKING)
+
+- **`narrow` export removed.** Use `is(value, ['a','b'])` directly, or `ops.is(['a','b'])` for predicate-factory use.
+- `createUnion().narrow(...)` (inherited from `createPipeHandlers`) — use `is(value, ['a','b'])`.
+- `UnionFactory.narrow` type removed from public types.
+
+Migration:
+- `narrow(v, ['a','b'])` → `is(v, ['a','b'])`
+- `items.filter(narrow(['a','b']))` → `const ops = createPipeHandlers<T>('type'); items.filter(ops.is(['a','b']))`
+- `shapes.filter(narrow(['circle','rect']))` → `shapes.filter(ops.is(['circle','rect']))`
+- Value-first forms are unchanged: `is(value, 'circle')`, `is(value, ['circle','rectangle'])`, `is(value, 'click', 'kind')`.
+
+Still available (deprecated, pending a future major):
+- `createUnion().is.<variant>` — per-variant guards. Use standalone `is(value, 'variant')` or `ops.is('variant')`. Note `createUnion().isKnown(...)` stays — it remains uniquely schema-aware.
+
+### Changed
+
+- Standalone `is()` collapsed to 2 typed value-first overloads plus an untyped fallback — no runtime arity-based disambiguation. `is('foo', 'kind')` (arity 2 with two strings) is unambiguously **value-first**: `'foo'` is the value, `'kind'` is the discriminant key.
+- `hasVariant` helper tightened to accept `string | readonly string[]` directly — eliminates per-call allocation on the single-variant hot path (previously wrapped via `toArray`).
+- `UnionFactory.count` and `UnionFactory.partition` types are curried (`(variants) => (items) => result`) to match the runtime spread from `createPipeHandlers`.
+- `partition` widened to accept a single variant or an array, mirroring `count`.
+- Internal refactor for bundle size: `clearStackTrace` helper inlined into a single `fail` helper; `guard()` double-curry replaced with direct `ensureUnion` checks; `match` / `matchWithDefault` / `map` / `mapAll` simplified; `toArray` helper shared by `count` / `partition`.
+- `src/helpers.ts` deleted (functionality inlined).
+- README updated: `is()` is presented as the canonical guard, with new `count` / `partition` sections, expanded `is` documentation, and migration notes for `narrow` and bound guard helpers. Stale `narrow (deprecated)` TOC link removed.
+- `samples/pipe-composition.ts` rebuilt to demonstrate `count`, `partition`, and the expanded `is()` API alongside the existing pipe composition story.
+- `scripts/verify-package.mjs` expected-exports list updated to drop `narrow`, keeping release verification in sync with the removed public surface.
+
+### Bundle size
+
+- Canonical metric (`esbuild --bundle --minify`, non-gzipped): **1,748 B (1.71 KB)** — well under the 3.0 KB cap, despite adding `count`, `partition`, and the expanded `is()` surface.
+- Run `npm run size` to reproduce.
+
+### Benchmarks
+
+Hand-rolled micro-bench over 100,000 mixed-variant items × 50 iterations (`npm run bench`):
+
+| Operation                                                    | ms/op |
+| ------------------------------------------------------------ | ----- |
+| `count(items, 'circle')`                                     | 0.76  |
+| `items.filter(s => s.type === 'circle').length`              | 0.60  |
+| `count(items, ['circle', 'rectangle'])`                      | 0.83  |
+| inline filter+length, two variants                           | 0.74  |
+| `partition(items, 'circle')`                                 | 0.69  |
+| two-filter equivalent (`filter` + `filter`)                  | 1.38  |
+
+`count` is on the same order of magnitude as a hand-rolled inline filter (the small overhead comes from `Array.includes`). `partition` is roughly 2× faster than the two-filter equivalent because it only walks the array once.
+
 ## [1.1.1] - 2026-04-08
 
 ### Fixed

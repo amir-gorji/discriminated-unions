@@ -258,12 +258,11 @@ export type UnionFactory<D extends string, Schema extends UnionSchema<D>> = {
     ...args: Parameters<Schema[K]>
   ) => Prettify<Omit<ReturnType<Schema[K]>, D> & { [Disc in D]: K }>;
 } & {
-  /** @deprecated Use standalone `is(value, 'variant')` instead. Bound `.is.<variant>` will be removed in v2.0. */
-  readonly is: {
-    [K in keyof Schema & string]: (
-      x: unknown,
-    ) => x is ReturnType<Schema[K]> & { [Disc in D]: K };
-  };
+  readonly is: <U extends keyof Schema & string>(
+    variants: U | readonly U[],
+  ) => (
+    input: InferUnionFromSchema<D, Schema>,
+  ) => input is Extract<InferUnionFromSchema<D, Schema>, { [Disc in D]: U }>;
   readonly isKnown: (x: unknown) => x is InferUnionFromSchema<D, Schema>;
   readonly match: <U, Payload extends any = never>(
     handlers: Matcher<InferUnionFromSchema<D, Schema>, U, D, Payload>,

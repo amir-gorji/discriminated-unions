@@ -4,10 +4,10 @@
 [![license](https://img.shields.io/npm/l/dismatch)](./LICENSE)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue)](https://www.typescriptlang.org/)
 
-Type-safe discriminated unions for TypeScript. Define once, get constructors, type guards, and exhaustive pattern matching — all from a single schema. Zero dependencies. ~2 kB minified.
+Type-safe discriminated unions for TypeScript. Define once, get constructors, type guards, and exhaustive pattern matching — all from a single schema. Zero dependencies. ~1.7 kB minified.
 
 ```ts
-import { createUnion, type InferUnion } from 'dismatch';
+import { createUnion, is, type InferUnion } from 'dismatch';
 
 const Shape = createUnion('type', {
   circle: (radius: number) => ({ radius }),
@@ -17,7 +17,7 @@ const Shape = createUnion('type', {
 type Shape = InferUnion<typeof Shape>;
 
 Shape.circle(5); // { type: 'circle', radius: 5 }
-Shape.is.circle(shape); // type guard → narrows to circle
+is(shape, 'circle'); // type guard → narrows to circle
 Shape.isKnown(apiResponse); // runtime check against declared variants
 
 const area = Shape.match({
@@ -73,7 +73,7 @@ npm install dismatch
 
 | Capability                                | dismatch                | ts-pattern | unionize       | @effect/match     |
 | ----------------------------------------- | ----------------------- | ---------- | -------------- | ----------------- |
-| Bundle size                               | **~2 kB**               | ~2 kB      | unclear        | large (ecosystem) |
+| Bundle size                               | **~1.7 kB**             | ~2 kB      | unclear        | large (ecosystem) |
 | Zero dependencies                         | Yes                     | Yes        | Yes            | No                |
 | Exhaustive matching (compile time)        | Yes                     | Yes        | Yes            | Yes               |
 | Schema-aware runtime validation           | **Yes**                 | No         | No             | No                |
@@ -82,7 +82,7 @@ npm install dismatch
 | Collection counters (`count`/`partition`) | **Yes**                 | No         | No             | No                |
 | Partial transforms (`map`)                | **Yes**                 | No         | No             | No                |
 | Clean stack traces                        | **Yes**                 | No         | No             | No                |
-| Payload to handlers                       | **Yes**                 | No         | No             | No                |
+| Passing payload to handlers               | **Yes**                 | No         | No             | No                |
 | Single-schema union toolkit               | **Yes** (`createUnion`) | No         | Yes (inactive) | No                |
 | Maintenance                               | Active                  | Active     | Inactive       | Active            |
 | Beyond discriminated unions               | No                      | Yes        | No             | Yes               |
@@ -120,14 +120,17 @@ const l = Result.loading(); // { type: 'loading' }
 
 ### 3. Type guards
 
-Per-variant guards narrow the type. Work in `if` blocks and `.filter()`:
+Use the standalone `is()` for `if`-block narrowing, and the bound curried `.is(variant)` predicate factory for `.filter()` composition — both narrow the type:
 
 ```ts
-if (Result.is.ok(r)) {
+import { is } from 'dismatch';
+
+if (is(r, 'ok')) {
   console.log(r.data); // TypeScript knows: r is { type: 'ok'; data: string }
 }
 
-const errors = results.filter(Result.is.error);
+const errors = results.filter(Result.is('error'));
+//    ^? { type: 'error'; message: string }[]
 ```
 
 `isKnown` checks if a value is any declared variant — useful at system boundaries:
@@ -137,24 +140,18 @@ Result.isKnown(apiResponse); // true if type is 'ok' | 'error' | 'loading'
 Result.isKnown({ type: 'unknown' }); // false
 ```
 
-For multi-variant narrowing — to a sub-union of two or more variants — use the standalone `is()` inside `if` blocks, or `createPipeHandlers(...).is(...)` for `.filter()` composition without call-site generics:
+Both forms accept a single variant or an array of variants for sub-union narrowing:
 
 ```ts
-import { is, createPipeHandlers } from 'dismatch';
+if (is(r, ['ok', 'error'])) {
+  r; // narrowed to { type: 'ok'; ... } | { type: 'error'; ... }
+}
 
-const resultOps = createPipeHandlers<Result, 'type'>('type');
-
-const results: Result[] = [
-  Result.ok('hi'),
-  Result.error('no'),
-  Result.loading(),
-];
-
-const settled = results.filter(resultOps.is(['ok', 'error']));
+const settled = results.filter(Result.is(['ok', 'error']));
 // settled: ({ type: 'ok'; data: string } | { type: 'error'; message: string })[]
 ```
 
-> The bound `Result.is.<variant>` helper is **deprecated**. The standalone `is()` is now strictly value-first — for predicate-factory use in `.filter()`, use [`createPipeHandlers(...).is(...)`](#createpipehandlers), which binds the union type once and needs no generics at call sites.
+> **Removed in 2.0.0**: the per-variant `Result.is.ok` / `Result.is.error` bound guards and the old `narrow` export are gone. Use `is(value, 'variant')` for narrowing and `Result.is('variant')` (or standalone `createPipeHandlers(...).is(...)`) for predicate-factory use.
 
 ### 4. Pattern matching
 
@@ -196,7 +193,6 @@ const stats = Result.fold(results, { oks: 0, errors: 0, loadings: 0 })({
   loading: (acc) => ({ ...acc, loadings: acc.loadings + 1 }),
 });
 // Expect stats = { circles: 2, totalArea: 416.699 }
-
 ```
 
 ### 5. Metadata
@@ -354,10 +350,7 @@ import { partition } from 'dismatch';
 const [circles, rest] = partition(shapes, 'circle');
 //      ^? Circle[]   ^? (Rectangle | Triangle)[]
 
-const [actionable, rest] = partition(notifications, [
-  'NEW',
-  'ACTION_NEEDED',
-]);
+const [actionable, rest] = partition(notifications, ['NEW', 'ACTION_NEEDED']);
 
 // Custom discriminant
 const [clicks, others] = partition(events, 'click', 'kind');

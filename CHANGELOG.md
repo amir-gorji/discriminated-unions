@@ -18,15 +18,16 @@
 - **`narrow` export removed.** Use `is(value, ['a','b'])` directly, or `ops.is(['a','b'])` for predicate-factory use.
 - `createUnion().narrow(...)` (inherited from `createPipeHandlers`) — use `is(value, ['a','b'])`.
 - `UnionFactory.narrow` type removed from public types.
+- **`createUnion().is.<variant>` per-variant bound guards removed.** `createUnion().is` is now the curried predicate-factory form inherited from `createPipeHandlers` — `Shape.is('circle')` returns `(input) => input is Circle`. `createUnion().isKnown(...)` stays — it remains uniquely schema-aware.
+- `UnionFactory.is` rewritten in `types.ts` from a per-variant object to the curried predicate-factory signature.
 
 Migration:
 - `narrow(v, ['a','b'])` → `is(v, ['a','b'])`
 - `items.filter(narrow(['a','b']))` → `const ops = createPipeHandlers<T>('type'); items.filter(ops.is(['a','b']))`
 - `shapes.filter(narrow(['circle','rect']))` → `shapes.filter(ops.is(['circle','rect']))`
+- `Shape.is.circle(x)` → `is(x, 'circle')` (narrowing) or `Shape.is('circle')(x)` (curried bound form).
+- `shapes.filter(Shape.is.circle)` → `shapes.filter(Shape.is('circle'))`.
 - Value-first forms are unchanged: `is(value, 'circle')`, `is(value, ['circle','rectangle'])`, `is(value, 'click', 'kind')`.
-
-Still available (deprecated, pending a future major):
-- `createUnion().is.<variant>` — per-variant guards. Use standalone `is(value, 'variant')` or `ops.is('variant')`. Note `createUnion().isKnown(...)` stays — it remains uniquely schema-aware.
 
 ### Changed
 
@@ -42,7 +43,7 @@ Still available (deprecated, pending a future major):
 
 ### Bundle size
 
-- Canonical metric (`esbuild --bundle --minify`, non-gzipped): **1,748 B (1.71 KB)** — well under the 3.0 KB cap, despite adding `count`, `partition`, and the expanded `is()` surface.
+- Canonical metric (`esbuild --bundle --minify`, non-gzipped): **1,713 B (1.67 KB)** — well under the 3.0 KB cap, despite adding `count`, `partition`, and the expanded `is()` surface. Removing `createUnion().is.<variant>` shed ~35 B versus the earlier 2.0.0 figure.
 - Run `npm run size` to reproduce.
 
 ### Benchmarks

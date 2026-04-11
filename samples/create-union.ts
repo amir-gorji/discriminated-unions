@@ -9,12 +9,12 @@
  *   - createUnion() for defining a union from a schema
  *   - InferUnion for deriving the TypeScript union type
  *   - Constructors that inject the discriminant automatically
- *   - Per-variant type guards (.is.variant)
+ *   - Curried pipe-friendly guards (.is(variant))
  *   - Schema-aware runtime check (.isKnown)
  *   - Bound match / matchWithDefault / map / mapAll
  */
 
-import { createUnion } from 'dismatch';
+import { createUnion, is } from 'dismatch';
 import type { InferUnion } from 'dismatch';
 
 // ── Define the union ────────────────────────────────────────────────────────
@@ -40,13 +40,13 @@ console.log('Constructed:', c, r, t);
 
 const shapes: Shape[] = [c, r, t, circle(8)];
 
-// Per-variant guard — great as an array filter predicate
-const circles = shapes.filter(Shape.is.circle);
+// Curried factory guard — great as an array filter predicate
+const circles = shapes.filter(Shape.is('circle'));
 console.log('Circles:', circles);
 // [{ type: 'circle', radius: 5 }, { type: 'circle', radius: 8 }]
 
-// if-block narrowing
-if (Shape.is.rectangle(r)) {
+// if-block narrowing — prefer the standalone is() form
+if (is(r, 'rectangle')) {
   console.log('Area:', r.width * r.height);
 }
 

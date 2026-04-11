@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { createUnion } from '../unions';
+import { createUnion, is } from '../unions';
 import type { InferUnion } from '../types';
 
 const Shape = createUnion('type', {
@@ -48,43 +48,43 @@ describe('createUnion', () => {
     });
   });
 
-  describe('is (per-variant type guards)', () => {
+  describe('bound is (curried predicate factory)', () => {
     it('should return true for a matching variant', () => {
       const c = Shape.circle(5);
-      expect(Shape.is.circle(c)).toBe(true);
+      expect(Shape.is('circle')(c)).toBe(true);
     });
 
     it('should return false for a non-matching variant', () => {
       const r = Shape.rectangle(4, 6);
-      expect(Shape.is.circle(r)).toBe(false);
+      expect(Shape.is('circle')(r)).toBe(false);
     });
 
     it('should return false for null', () => {
-      expect(Shape.is.circle(null)).toBe(false);
+      expect(Shape.is('circle')(null as any)).toBe(false);
     });
 
     it('should return false for undefined', () => {
-      expect(Shape.is.circle(undefined)).toBe(false);
+      expect(Shape.is('circle')(undefined as any)).toBe(false);
     });
 
     it('should return false for primitives', () => {
-      expect(Shape.is.circle(42)).toBe(false);
-      expect(Shape.is.circle('circle')).toBe(false);
-      expect(Shape.is.circle(true)).toBe(false);
+      expect(Shape.is('circle')(42 as any)).toBe(false);
+      expect(Shape.is('circle')('circle' as any)).toBe(false);
+      expect(Shape.is('circle')(true as any)).toBe(false);
     });
 
     it('should return false for objects without discriminant', () => {
-      expect(Shape.is.circle({ radius: 5 })).toBe(false);
+      expect(Shape.is('circle')({ radius: 5 } as any)).toBe(false);
     });
 
     it('should return false for objects with wrong discriminant value', () => {
-      expect(Shape.is.circle({ type: 'hexagon', sides: 6 })).toBe(false);
+      expect(Shape.is('circle')({ type: 'hexagon', sides: 6 } as any)).toBe(false);
     });
 
     it('should work with custom discriminant', () => {
       const dog = Animal.dog('Rex');
-      expect(Animal.is.dog(dog)).toBe(true);
-      expect(Animal.is.cat(dog)).toBe(false);
+      expect(Animal.is('dog')(dog)).toBe(true);
+      expect(Animal.is('cat')(dog)).toBe(false);
     });
 
     it('should work as an array filter predicate', () => {
@@ -94,10 +94,45 @@ describe('createUnion', () => {
         Shape.circle(4),
         Shape.triangle(5, 6),
       ];
-      const circles = shapes.filter(Shape.is.circle);
+      const circles = shapes.filter(Shape.is('circle'));
       expect(circles).toHaveLength(2);
       expect(circles[0]).toEqual({ type: 'circle', radius: 1 });
       expect(circles[1]).toEqual({ type: 'circle', radius: 4 });
+    });
+
+    it('should narrow inside if blocks', () => {
+      const shape: Shape = Shape.circle(5);
+      if (Shape.is('circle')(shape)) {
+        expect(shape.radius).toBe(5);
+      } else {
+        throw new Error('should have narrowed to circle');
+      }
+    });
+
+    it('should accept an array of variants for sub-union narrowing', () => {
+      const shapes = [
+        Shape.circle(1),
+        Shape.rectangle(2, 3),
+        Shape.triangle(4, 5),
+      ];
+      const roundOrRect = shapes.filter(Shape.is(['circle', 'rectangle']));
+      expect(roundOrRect).toHaveLength(2);
+    });
+
+    it('should not expose per-variant guards as object properties (removed in 2.0.0)', () => {
+      expect(typeof Shape.is).toBe('function');
+      expect((Shape.is as any).circle).toBeUndefined();
+      expect((Shape.is as any).rectangle).toBeUndefined();
+    });
+
+    it('should interop with standalone is() for if-block narrowing', () => {
+      const shape: Shape = Shape.rectangle(4, 6);
+      if (is(shape, 'rectangle')) {
+        expect(shape.width).toBe(4);
+        expect(shape.height).toBe(6);
+      } else {
+        throw new Error('should have narrowed to rectangle');
+      }
     });
   });
 

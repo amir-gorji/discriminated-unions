@@ -549,8 +549,8 @@ export function createPipeHandlers<
  * type Shape = InferUnion<typeof Shape>;
  *
  * Shape.circle(5)                   // { type: 'circle', radius: 5 }
- * Shape.is.circle(x)               // narrows x to circle variant
- * Shape.isKnown(x)                 // true if x.type is a declared variant
+ * shapes.filter(Shape.is('circle')) // curried predicate — Circle[]
+ * Shape.isKnown(x)                  // true if x.type is a declared variant
  *
  * const getArea = Shape.match({
  *   circle:    ({ radius })        => Math.PI * radius ** 2,
@@ -568,20 +568,16 @@ export function createUnion<
   const keys = Object.keys(schema) as (keyof Schema & string)[];
 
   const constructors: any = {};
-  const guards: any = {};
 
   for (const key of keys) {
     constructors[key] = (...args: any[]) => ({
       ...schema[key](...args),
       [discriminant]: key,
     });
-    guards[key] = (x: unknown): boolean =>
-      isUnion(x, discriminant) && (x as any)[discriminant] === key;
   }
 
   return Object.assign(constructors, {
     ...createPipeHandlers<Union, any>(discriminant as any),
-    is: guards,
     isKnown: (x: unknown): boolean =>
       isUnion(x, discriminant) && (x as any)[discriminant] in schema,
     variants: Object.freeze(keys) as ReadonlyArray<keyof Schema & string>,

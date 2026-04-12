@@ -3,6 +3,7 @@
 [![npm](https://img.shields.io/npm/v/dismatch)](https://www.npmjs.com/package/dismatch)
 [![license](https://img.shields.io/npm/l/dismatch)](./LICENSE)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue)](https://www.typescriptlang.org/)
+[![bundle size](https://img.shields.io/bundlephobia/minzip/dismatch)](https://bundlephobia.com/package/dismatch)
 
 Type-safe discriminated unions for TypeScript. Define once, get constructors, type guards, and exhaustive pattern matching — all from a single schema. Zero dependencies. ~1.7 kB minified.
 

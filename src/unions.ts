@@ -22,6 +22,8 @@ declare global {
 
 // ── Internal helpers ───────────────────────────────────────────────────────
 
+const DEFAULT_DISCRIMINANT = 'type';
+
 function fail(message: string, caller: Function): never {
   const err = new Error(message);
   Error.captureStackTrace?.(err, caller);
@@ -34,20 +36,6 @@ function ensureUnion(
   caller: Function,
 ): void {
   if (!isUnion(input, discriminant)) fail('Not a union', caller);
-}
-
-function toArray<T>(value: T | readonly T[]): readonly T[] {
-  return Array.isArray(value) ? value : [value as T];
-}
-
-function hasVariant(
-  input: unknown,
-  variants: string | readonly string[],
-  discriminant: PropertyKey,
-): boolean {
-  if (!isUnion(input, discriminant)) return false;
-  const v = (input as any)[discriminant] as string;
-  return typeof variants === 'string' ? v === variants : variants.includes(v);
 }
 
 function dispatch<
@@ -91,7 +79,7 @@ function dispatch<
  */
 export function isUnion<Discriminant extends PropertyKey>(
   input: unknown,
-  discriminant: Discriminant = 'type' as Discriminant,
+  discriminant: Discriminant = DEFAULT_DISCRIMINANT as Discriminant,
 ): input is SampleUnion<Discriminant> {
   return !!(
     input &&
@@ -150,9 +138,11 @@ export function is(
 export function is(
   union: unknown,
   variants: string | readonly string[],
-  discriminant: PropertyKey = 'type',
+  discriminant: PropertyKey = DEFAULT_DISCRIMINANT,
 ): boolean {
-  return hasVariant(union, variants, discriminant);
+  if (!isUnion(union, discriminant)) return false;
+  const v = (union as any)[discriminant] as string;
+  return typeof variants === 'string' ? v === variants : variants.includes(v);
 }
 
 /**
@@ -177,7 +167,7 @@ export function map<
   Payload extends any = never,
 >(
   input: T,
-  discriminant: Discriminant = 'type' as Discriminant,
+  discriminant: Discriminant = DEFAULT_DISCRIMINANT as Discriminant,
   payload?: Payload,
 ): (mapper: Mapper<T, Discriminant, Payload>) => T {
   ensureUnion(input, discriminant, map);
@@ -217,7 +207,7 @@ export function mapAll<
   Payload extends any = never,
 >(
   input: T,
-  discriminant: Discriminant = 'type' as Discriminant,
+  discriminant: Discriminant = DEFAULT_DISCRIMINANT as Discriminant,
   payload?: Payload,
 ): (mapper: MapperAll<T, Discriminant, Payload>) => T {
   ensureUnion(input, discriminant, mapAll);
@@ -256,7 +246,7 @@ export function match<
   Payload extends any = never,
 >(
   input: T,
-  discriminant: Discriminant = 'type' as Discriminant,
+  discriminant: Discriminant = DEFAULT_DISCRIMINANT as Discriminant,
   payload?: Payload,
 ): <Result>(mapper: Matcher<T, Result, Discriminant, Payload>) => Result {
   ensureUnion(input, discriminant, match);
@@ -265,7 +255,7 @@ export function match<
       input,
       matcher as unknown as Record<string, (input: any, payload: Payload) => Result>,
       discriminant,
-      undefined,
+      (matcher as any).Default,
       payload,
     );
 }
@@ -292,18 +282,10 @@ export function matchWithDefault<
   Payload extends any = never,
 >(
   input: T,
-  discriminant: Discriminant = 'type' as Discriminant,
+  discriminant: Discriminant = DEFAULT_DISCRIMINANT as Discriminant,
   payload?: Payload,
 ): <U>(matcher: MatcherWithDefault<T, U, Discriminant, Payload>) => U {
-  ensureUnion(input, discriminant, matchWithDefault);
-  return <U>(matcher: MatcherWithDefault<T, U, Discriminant, Payload>) =>
-    dispatch<T, U, Discriminant, Payload>(
-      input,
-      matcher as unknown as Record<string, (input: any, payload: Payload) => U>,
-      discriminant,
-      matcher.Default,
-      payload,
-    );
+  return match(input, discriminant, payload) as any;
 }
 
 /**
@@ -331,7 +313,7 @@ export function fold<
 >(
   items: readonly T[],
   initial: Acc,
-  discriminant: Discriminant = 'type' as Discriminant,
+  discriminant: Discriminant = DEFAULT_DISCRIMINANT as Discriminant,
 ): (handlers: Folder<T, Acc, Discriminant>) => Acc {
   return (handlers) => {
     let acc = initial;
@@ -369,9 +351,9 @@ export function count<
 >(
   items: readonly T[],
   variants: T[Discriminant] | readonly T[Discriminant][],
-  discriminant: Discriminant = 'type' as Discriminant,
+  discriminant: Discriminant = DEFAULT_DISCRIMINANT as Discriminant,
 ): number {
-  const keys = toArray(variants) as readonly string[];
+  const keys = (Array.isArray(variants) ? variants : [variants]) as readonly string[];
   let n = 0;
   for (const item of items) {
     ensureUnion(item, discriminant, count);
@@ -403,12 +385,12 @@ export function partition<
 >(
   items: readonly T[],
   variants: U | readonly U[],
-  discriminant: Discriminant = 'type' as Discriminant,
+  discriminant: Discriminant = DEFAULT_DISCRIMINANT as Discriminant,
 ): [
   Extract<T, { [K in Discriminant]: U }>[],
   Exclude<T, { [K in Discriminant]: U }>[],
 ] {
-  const keys = toArray(variants) as readonly string[];
+  const keys = (Array.isArray(variants) ? variants : [variants]) as readonly string[];
   const matched: any[] = [];
   const rest: any[] = [];
   for (const item of items) {
@@ -460,45 +442,29 @@ export function createPipeHandlers<
       <U, Payload extends any = never>(
         handlers: Matcher<T, U, Discriminant, Payload>,
       ) =>
-      (
-        ...inputs: [Payload] extends [never]
-          ? [input: T]
-          : [input: T, payload: Payload]
-      ): U =>
-        match(inputs[0], discriminant, inputs[1])(handlers),
+      (input: T, payload?: Payload): U =>
+        match(input, discriminant, payload)(handlers),
 
     matchWithDefault:
       <U, Payload extends any = never>(
         handlers: MatcherWithDefault<T, U, Discriminant, Payload>,
       ) =>
-      (
-        ...inputs: [Payload] extends [never]
-          ? [input: T]
-          : [input: T, payload: Payload]
-      ): U =>
-        matchWithDefault(inputs[0], discriminant, inputs[1])(handlers),
+      (input: T, payload?: Payload): U =>
+        matchWithDefault(input, discriminant, payload)(handlers),
 
     map:
       <Payload extends any = never>(
         handlers: Mapper<T, Discriminant, Payload>,
       ) =>
-      (
-        ...inputs: [Payload] extends [never]
-          ? [input: T]
-          : [input: T, payload: Payload]
-      ): T =>
-        map(inputs[0], discriminant, inputs[1])(handlers),
+      (input: T, payload?: Payload): T =>
+        map(input, discriminant, payload)(handlers),
 
     mapAll:
       <Payload extends any = never>(
         handlers: MapperAll<T, Discriminant, Payload>,
       ) =>
-      (
-        ...inputs: [Payload] extends [never]
-          ? [input: T]
-          : [input: T, payload: Payload]
-      ): T =>
-        mapAll(inputs[0], discriminant, inputs[1])(handlers),
+      (input: T, payload?: Payload): T =>
+        mapAll(input, discriminant, payload)(handlers),
 
     fold:
       <Acc>(items: readonly T[], initial: Acc) =>
@@ -521,7 +487,7 @@ export function createPipeHandlers<
     is:
       <U extends T[Discriminant]>(variants: U | readonly U[]) =>
       (input: T): input is Extract<T, { [K in Discriminant]: U }> =>
-        hasVariant(
+        is(
           input,
           variants as string | readonly string[],
           discriminant,
@@ -583,7 +549,7 @@ export function createUnion<
     ...createPipeHandlers<Union, any>(discriminant as any),
     isKnown: (x: unknown): boolean =>
       isUnion(x, discriminant) && (x as any)[discriminant] in schema,
-    variants: Object.freeze(keys) as ReadonlyArray<keyof Schema & string>,
+    variants: keys as ReadonlyArray<keyof Schema & string>,
     discriminant,
   });
 }

@@ -1,5 +1,20 @@
 # Changelog
 
+## [2.0.1] - 2026-04-12
+
+### Changed
+
+- Inlined `toArray` and `hasVariant` helpers — eliminated two internal functions, reducing indirection and enabling better minification.
+- Extracted shared `DEFAULT_DISCRIMINANT` constant so the `'type'` string literal appears once in the bundle instead of at every call site.
+- Simplified `matchWithDefault` to delegate to `match` directly, removing duplicated `dispatch` call.
+- Simplified `createPipeHandlers` curried methods — replaced rest-parameter spread (`...inputs`) with plain `(input, payload?)` signatures, cutting per-method boilerplate.
+- Replaced `hasVariant` call in `createPipeHandlers().is` with the public `is()` function.
+- Removed `Object.freeze` on `createUnion().variants` array — unnecessary runtime cost with no safety benefit since the type is already `ReadonlyArray`.
+
+### Bundle size
+
+- Canonical metric (`esbuild --bundle --minify`, non-gzipped): **1,602 B (1.56 KB)** — down from 1,713 B in 2.0.0 (−111 B / −6.5%).
+
 ## [2.0.0] - 2026-04-11
 
 ### Added

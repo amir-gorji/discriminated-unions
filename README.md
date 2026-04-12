@@ -32,30 +32,39 @@ area(Shape.circle(5)); // 78.54
 
 ## Table of Contents
 
-- [Install](#install)
-- [Comparison](#comparison)
-- [Quick Start](#quick-start)
-  - [Define a union](#1-define-a-union)
-  - [Construct values](#2-construct-values)
-  - [Type guards](#3-type-guards)
-  - [Pattern matching](#4-pattern-matching)
-  - [Metadata](#5-metadata)
-- [Standalone Functions](#standalone-functions)
-  - [match](#match)
-  - [matchWithDefault](#matchwithdefault)
-  - [map / mapAll](#map--mapall)
-  - [is](#is)
-  - [fold](#fold)
-  - [count](#count)
-  - [partition](#partition)
-  - [isUnion](#isunion)
-  - [createPipeHandlers](#createpipehandlers)
-- [Type Helpers](#type-helpers)
-- [Custom Discriminant](#custom-discriminant)
-- [Patterns](#patterns)
-- [Clean Stack Traces](#clean-stack-traces)
-- [Contributing](#contributing)
-- [License](#license)
+- [dismatch](#dismatch)
+  - [Table of Contents](#table-of-contents)
+  - [Install](#install)
+  - [Comparison](#comparison)
+    - [Why dismatch?](#why-dismatch)
+  - [Quick Start](#quick-start)
+    - [1. Define a union](#1-define-a-union)
+    - [2. Construct values](#2-construct-values)
+    - [3. Type guards](#3-type-guards)
+    - [4. Pattern matching](#4-pattern-matching)
+    - [5. Metadata](#5-metadata)
+  - [Standalone Functions](#standalone-functions)
+    - [`match`](#match)
+    - [`matchWithDefault`](#matchwithdefault)
+    - [`map` / `mapAll`](#map--mapall)
+    - [`fold`](#fold)
+    - [`is`](#is)
+    - [`count`](#count)
+    - [`partition`](#partition)
+    - [`isUnion`](#isunion)
+    - [`createPipeHandlers`](#createpipehandlers)
+  - [Type Helpers](#type-helpers)
+    - [`InferUnion<T>`](#inferuniont)
+    - [`TakeDiscriminant<T>`](#takediscriminantt)
+    - [`Folder<T, Acc, Discriminant>`](#foldert-acc-discriminant)
+  - [Custom Discriminant](#custom-discriminant)
+  - [Patterns](#patterns)
+    - [Rendering UI](#rendering-ui)
+    - [Reducer](#reducer)
+    - [Pipe Composition](#pipe-composition)
+  - [Clean Stack Traces](#clean-stack-traces)
+  - [Contributing](#contributing)
+  - [License](#license)
 
 ---
 
@@ -88,6 +97,65 @@ npm install dismatch
 | Beyond discriminated unions               | No                      | Yes        | No             | Yes               |
 
 `dismatch` is the most complete discriminated union toolkit in TypeScript with rare features.
+
+### Why dismatch?
+
+**ts-pattern matches any pattern. dismatch manages discriminated unions.**
+
+Most TypeScript apps live and breathe `{ type: 'x' } | { type: 'y' }`. For that world, dismatch replaces an entire category of hand-written boilerplate with a single schema — constructors, guards, matchers, transforms, and collection ops — in 1.7 kB.
+
+**The everyday match — zero ceremony:**
+
+```ts
+// ts-pattern
+const label = match(state)
+  .with({ type: 'loading' }, () => 'Loading…')
+  .with({ type: 'error' }, ({ error }) => error.message)
+  .exhaustive();
+
+// dismatch — the variant name *is* the pattern
+const label = match(state)({
+  loading: () => 'Loading…',
+  error: ({ error }) => error.message,
+});
+```
+
+No `.with()`, no `{ type: '…' }` wrappers, no `.exhaustive()`. Exhaustiveness is enforced by TypeScript itself — not an opt-in method call.
+
+**Reusable matchers — define once, apply everywhere:**
+
+```ts
+// ts-pattern — every match is inline, one-shot, wrapped in a function
+const getArea = (shape: Shape): number =>
+  match(shape)
+    .with({ type: 'circle' }, ({ radius }) => Math.PI * radius ** 2)
+    .with({ type: 'rectangle' }, ({ width, height }) => width * height)
+    .exhaustive();
+
+// dismatch — handlers-first, returns a reusable function directly
+const getArea = Shape.match({
+  circle: ({ radius }) => Math.PI * radius ** 2,
+  rectangle: ({ width, height }) => width * height,
+});
+
+shapes.map(getArea); // just works
+shapes.filter(Shape.is('circle')); // narrowed to Circle[]
+```
+
+No other library lets you define handlers once and get back a typed, reusable function. This is the killer differentiator.
+
+**Things no TypeScript library offers — except dismatch:**
+
+| Capability                    | What it saves you                                                                                                               |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `is(['ok', 'error'])`         | Multi-variant narrowing to a proper sub-union — no manual type guards                                                           |
+| `map({ error: ... })`         | Partial transforms where unmatched variants pass through unchanged — no `...spread`, no identity fallbacks                      |
+| `fold(items, init)(handlers)` | Exhaustive aggregation in one pass — no `reduce` + `match` + `.exhaustive()` sandwich                                           |
+| `count(items, 'error')`       | Variant-aware counting without `.filter().length` and the throwaway array                                                       |
+| `partition(items, 'ok')`      | Split with narrowed types on _both_ sides — no two-pass `.filter()`                                                             |
+| `createUnion(...)`            | One schema produces constructors, guards, matchers, transforms, metadata. Others give you matching; the rest you write by hand. |
+
+> Instead of being a swiss-army knife, dismatch chose to be a scalpel for the one thing TypeScript developers do most.
 
 ---
 
@@ -264,9 +332,11 @@ const normalized = mapAll(shape)({
 
 Exhaustive single-pass aggregator over a collection of discriminated union values. Each handler receives `(accumulator, variantData)` and returns the new accumulator. All variants must have handlers.
 
-```ts
-import { fold } from 'dismatch';
+To see why `fold` exists, compare three ways to aggregate over a collection of shapes:
 
+**With such a data:**
+
+```ts
 type Shape =
   | { type: 'circle'; radius: number }
   | { type: 'rectangle'; width: number; height: number };
@@ -276,6 +346,57 @@ const shapes: Shape[] = [
   { type: 'rectangle', width: 4, height: 6 },
   { type: 'circle', radius: 10 },
 ];
+```
+
+**Plain TypeScript — manual `reduce` with a `switch`:**
+
+```ts
+const stats = shapes.reduce(
+  (acc, shape) => {
+    switch (shape.type) {
+      case 'circle':
+        return {
+          circles: acc.circles + 1,
+          totalArea: acc.totalArea + Math.PI * shape.radius ** 2,
+        };
+      case 'rectangle':
+        return {
+          ...acc,
+          totalArea: acc.totalArea + shape.width * shape.height,
+        };
+    }
+  },
+  { circles: 0, totalArea: 0 },
+);
+```
+
+**Not exhaustive** — adding a new variant won't cause a compile error. The accumulator type has to be repeated or inferred loosely.
+
+**ts-pattern — `reduce` + `match` + `.exhaustive()`:**
+
+```ts
+const stats = shapes.reduce(
+  (acc, shape) =>
+    match(shape)
+      .with({ type: 'circle' }, ({ radius }) => ({
+        circles: acc.circles + 1,
+        totalArea: acc.totalArea + Math.PI * radius ** 2,
+      }))
+      .with({ type: 'rectangle' }, ({ width, height }) => ({
+        ...acc,
+        totalArea: acc.totalArea + width * height,
+      }))
+      .exhaustive(),
+  { circles: 0, totalArea: 0 },
+);
+```
+
+Exhaustive, but three layers of indirection (`reduce` → `match` → `.exhaustive()`) for a single operation.
+
+**dismatch — `fold`:**
+
+```ts
+import { fold } from 'dismatch';
 
 const stats = fold(shapes, { circles: 0, totalArea: 0 })({
   circle: (acc, { radius }) => ({
@@ -288,6 +409,8 @@ const stats = fold(shapes, { circles: 0, totalArea: 0 })({
   }),
 });
 ```
+
+Exhaustive, single-pass, and purpose-built — no `reduce` wrapper, no `.exhaustive()` call, no `{ type: '…' }` noise.
 
 ### `is`
 
@@ -316,7 +439,7 @@ For `.filter()`, `.find()`, or pipe composition, use [`createPipeHandlers(...).i
 
 ### `count`
 
-Counts how many items in a collection match the given variant(s). Single-pass, no intermediate array allocation.
+Counts how many items in a collection match the given variant(s). Single-pass, no intermediate array allocation. No TypeScript library offers a variant-aware counter — this is unique to dismatch.
 
 ```ts
 import { count } from 'dismatch';
@@ -342,7 +465,7 @@ count(events, ['click', 'keydown'], 'kind');
 
 ### `partition`
 
-Splits a collection into two arrays — items matching the variant(s) and the rest — in one pass with fully narrowed types.
+Splits a collection into two arrays — items matching the variant(s) and the rest — in one pass with fully narrowed types. No TypeScript library offers variant-aware partitioning with narrowed types on both sides — this is unique to dismatch.
 
 ```ts
 import { partition } from 'dismatch';

@@ -71,6 +71,35 @@ describe('partition', () => {
   });
 });
 
+describe('partition — non-union items are skipped', () => {
+  it('excludes null from both tuple elements', () => {
+    const mixed: any[] = [circle, null, rectangle];
+    const [matched, rest] = partition(mixed, 'circle');
+    expect(matched).toEqual([circle]);
+    expect(rest).toEqual([rectangle]);
+  });
+
+  it('excludes plain objects without a discriminant from both tuple elements', () => {
+    const mixed: any[] = [circle, { name: 'not a union' }, triangle];
+    const [matched, rest] = partition(mixed, 'circle');
+    expect(matched).toEqual([circle]);
+    expect(rest).toEqual([triangle]);
+  });
+
+  it('excludes primitives from both tuple elements', () => {
+    const mixed: any[] = [circle, 'string', 42, rectangle];
+    const [matched, rest] = partition(mixed, 'circle');
+    expect(matched).toEqual([circle]);
+    expect(rest).toEqual([rectangle]);
+  });
+
+  it('returns two empty arrays when all items are invalid', () => {
+    const [matched, rest] = partition([null, undefined, 'x'] as any[], 'circle');
+    expect(matched).toHaveLength(0);
+    expect(rest).toHaveLength(0);
+  });
+});
+
 describe('partition — custom discriminant', () => {
   const dog: Animal = { kind: 'dog', name: 'Rex' };
   const cat: Animal = { kind: 'cat', lives: 9 };

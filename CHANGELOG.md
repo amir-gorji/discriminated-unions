@@ -6,8 +6,7 @@
 
 - Inlined `toArray` and `hasVariant` helpers — eliminated two internal functions, reducing indirection and enabling better minification.
 - Extracted shared `DEFAULT_DISCRIMINANT` constant so the `'type'` string literal appears once in the bundle instead of at every call site.
-- Simplified `matchWithDefault` to delegate to `match` directly, removing duplicated `dispatch` call.
-- Simplified `createPipeHandlers` curried methods — replaced rest-parameter spread (`...inputs`) with plain `(input, payload?)` signatures, cutting per-method boilerplate.
+- Simplified `createPipeHandlers` curried methods — replaced variadic rest-parameter spread (`...inputs`) with conditional rest params (`[Payload] extends [never] ? [] : [payload: Payload]`), enforcing payload is required when `Payload` isn't `never`.
 - Replaced `hasVariant` call in `createPipeHandlers().is` with the public `is()` function.
 - Removed `Object.freeze` on `createUnion().variants` array — unnecessary runtime cost with no safety benefit since the type is already `ReadonlyArray`.
 
@@ -37,6 +36,7 @@
 - `UnionFactory.is` rewritten in `types.ts` from a per-variant object to the curried predicate-factory signature.
 
 Migration:
+
 - `narrow(v, ['a','b'])` → `is(v, ['a','b'])`
 - `items.filter(narrow(['a','b']))` → `const ops = createPipeHandlers<T>('type'); items.filter(ops.is(['a','b']))`
 - `shapes.filter(narrow(['circle','rect']))` → `shapes.filter(ops.is(['circle','rect']))`
@@ -65,14 +65,14 @@ Migration:
 
 Hand-rolled micro-bench over 100,000 mixed-variant items × 50 iterations (`npm run bench`):
 
-| Operation                                                    | ms/op |
-| ------------------------------------------------------------ | ----- |
-| `count(items, 'circle')`                                     | 0.76  |
-| `items.filter(s => s.type === 'circle').length`              | 0.60  |
-| `count(items, ['circle', 'rectangle'])`                      | 0.83  |
-| inline filter+length, two variants                           | 0.74  |
-| `partition(items, 'circle')`                                 | 0.69  |
-| two-filter equivalent (`filter` + `filter`)                  | 1.38  |
+| Operation                                       | ms/op |
+| ----------------------------------------------- | ----- |
+| `count(items, 'circle')`                        | 0.76  |
+| `items.filter(s => s.type === 'circle').length` | 0.60  |
+| `count(items, ['circle', 'rectangle'])`         | 0.83  |
+| inline filter+length, two variants              | 0.74  |
+| `partition(items, 'circle')`                    | 0.69  |
+| two-filter equivalent (`filter` + `filter`)     | 1.38  |
 
 `count` is on the same order of magnitude as a hand-rolled inline filter (the small overhead comes from `Array.includes`). `partition` is roughly 2× faster than the two-filter equivalent because it only walks the array once.
 

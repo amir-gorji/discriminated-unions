@@ -350,7 +350,7 @@ describe('createUnion', () => {
       expect(Animal.variants).toEqual(['dog', 'cat', 'bird']);
     });
 
-    it('should expose variants as a readonly array', () => {
+    it('should expose variants as an array', () => {
       expect(Array.isArray(Shape.variants)).toBe(true);
     });
   });

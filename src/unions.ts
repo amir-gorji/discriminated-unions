@@ -557,7 +557,7 @@ export function createUnion<
     ...createPipeHandlers<Union, any>(discriminant as any),
     isKnown: (x: unknown): boolean =>
       isUnion(x, discriminant) && (x as any)[discriminant] in schema,
-    variants: keys as ReadonlyArray<keyof Schema & string>,
+    variants: [...keys] as ReadonlyArray<keyof Schema & string>,
     discriminant,
   });
 }

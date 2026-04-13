@@ -255,7 +255,7 @@ export function match<
       input,
       matcher as unknown as Record<string, (input: any, payload: Payload) => Result>,
       discriminant,
-      (matcher as any).Default,
+      undefined,
       payload,
     );
 }
@@ -285,7 +285,15 @@ export function matchWithDefault<
   discriminant: Discriminant = DEFAULT_DISCRIMINANT as Discriminant,
   payload?: Payload,
 ): <U>(matcher: MatcherWithDefault<T, U, Discriminant, Payload>) => U {
-  return match(input, discriminant, payload) as any;
+  ensureUnion(input, discriminant, matchWithDefault);
+  return <U>(matcher: MatcherWithDefault<T, U, Discriminant, Payload>) =>
+    dispatch<T, U, Discriminant, Payload>(
+      input,
+      matcher as unknown as Record<string, (input: any, payload: Payload) => U>,
+      discriminant,
+      (matcher as any).Default,
+      payload,
+    );
 }
 
 /**
@@ -442,29 +450,29 @@ export function createPipeHandlers<
       <U, Payload extends any = never>(
         handlers: Matcher<T, U, Discriminant, Payload>,
       ) =>
-      (input: T, payload?: Payload): U =>
-        match(input, discriminant, payload)(handlers),
+      (input: T, ...args: [Payload] extends [never] ? [] : [payload: Payload]): U =>
+        match(input, discriminant, args[0] as Payload)(handlers),
 
     matchWithDefault:
       <U, Payload extends any = never>(
         handlers: MatcherWithDefault<T, U, Discriminant, Payload>,
       ) =>
-      (input: T, payload?: Payload): U =>
-        matchWithDefault(input, discriminant, payload)(handlers),
+      (input: T, ...args: [Payload] extends [never] ? [] : [payload: Payload]): U =>
+        matchWithDefault(input, discriminant, args[0] as Payload)(handlers),
 
     map:
       <Payload extends any = never>(
         handlers: Mapper<T, Discriminant, Payload>,
       ) =>
-      (input: T, payload?: Payload): T =>
-        map(input, discriminant, payload)(handlers),
+      (input: T, ...args: [Payload] extends [never] ? [] : [payload: Payload]): T =>
+        map(input, discriminant, args[0] as Payload)(handlers),
 
     mapAll:
       <Payload extends any = never>(
         handlers: MapperAll<T, Discriminant, Payload>,
       ) =>
-      (input: T, payload?: Payload): T =>
-        mapAll(input, discriminant, payload)(handlers),
+      (input: T, ...args: [Payload] extends [never] ? [] : [payload: Payload]): T =>
+        mapAll(input, discriminant, args[0] as Payload)(handlers),
 
     fold:
       <Acc>(items: readonly T[], initial: Acc) =>

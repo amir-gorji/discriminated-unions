@@ -670,6 +670,8 @@ Error: Data is not of type discriminated union!
 
 ## Contributing
 
+See [CONTRIBUTING.md](./CONTRIBUTING.md) for guidelines, principles, and the PR workflow.
+
 ```bash
 npm test             # run tests
 npm run test:package # verify packed exports and tarball contents
@@ -677,6 +679,7 @@ npm run test:watch   # watch mode
 npm run ts:ci        # type-check
 npm run ts:package   # type-check the built package surface
 npm run build        # compile to lib/
+npm run size         # measure minified bundle size
 ```
 
 See [`samples/`](./samples) for real-world examples.

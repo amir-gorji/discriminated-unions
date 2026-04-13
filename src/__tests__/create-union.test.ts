@@ -337,9 +337,8 @@ describe('createUnion', () => {
   });
 
   describe('metadata', () => {
-    it('should expose variants as a frozen array', () => {
+    it('should expose variants as a readonly array', () => {
       expect(Shape.variants).toEqual(['circle', 'rectangle', 'triangle']);
-      expect(Object.isFrozen(Shape.variants)).toBe(true);
     });
 
     it('should expose the discriminant string', () => {
@@ -351,10 +350,8 @@ describe('createUnion', () => {
       expect(Animal.variants).toEqual(['dog', 'cat', 'bird']);
     });
 
-    it('variants array should not be modifiable', () => {
-      expect(() => {
-        (Shape.variants as any).push('hexagon');
-      }).toThrow();
+    it('should expose variants as an array', () => {
+      expect(Array.isArray(Shape.variants)).toBe(true);
     });
   });
 

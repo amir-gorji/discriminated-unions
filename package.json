@@ -1,7 +1,7 @@
 {
   "name": "dismatch",
   "description": "A lightweight discriminated unions library for TypeScript",
-  "version": "2.0.1",
+  "version": "2.1.0",
   "main": "lib/index.js",
   "module": "lib/index.mjs",
   "types": "lib/index.d.ts",
@@ -50,6 +50,9 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/amir-gorji/dismatch.git"
+  },
+  "engines": {
+    "node": ">=18"
   },
   "devDependencies": {
     "esbuild": "^0.27.0",

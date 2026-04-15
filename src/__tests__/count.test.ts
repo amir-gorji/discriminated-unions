@@ -77,6 +77,35 @@ describe('count — createPipeHandlers', () => {
   });
 });
 
+describe('count — non-union items are skipped', () => {
+  it('ignores null entries in a mixed array', () => {
+    const mixed: any[] = [
+      { type: 'circle', radius: 5 },
+      null,
+      { type: 'circle', radius: 10 },
+    ];
+    expect(count(mixed, 'circle')).toBe(2);
+  });
+
+  it('ignores plain objects without a discriminant', () => {
+    const mixed: any[] = [
+      { type: 'circle', radius: 5 },
+      { name: 'not a union' },
+      { type: 'rectangle', width: 4, height: 6 },
+    ];
+    expect(count(mixed, 'circle')).toBe(1);
+  });
+
+  it('ignores primitive values', () => {
+    const mixed: any[] = [{ type: 'circle', radius: 5 }, 'string', 42, true];
+    expect(count(mixed, 'circle')).toBe(1);
+  });
+
+  it('returns 0 when all items are invalid', () => {
+    expect(count([null, undefined, 'x', 42] as any[], 'circle')).toBe(0);
+  });
+});
+
 describe('count — createUnion', () => {
   const Shape = createUnion('type', {
     circle: (radius: number) => ({ radius }),

@@ -78,6 +78,12 @@ export type Matcher<
  * Unlike {@link Matcher}, individual variant handlers are optional. When a variant
  * has no handler, the `Default` function is called instead.
  *
+ * **Design limitation:** `Default` does not receive the triggering variant as an argument.
+ * When `Payload = never` (the default), `Default` receives no arguments at all — there
+ * is no way to inspect which variant fell through inside `Default`. If you need to
+ * branch on the unmatched variant, use exhaustive {@link Matcher} instead, or pass the
+ * original value via the `Payload` type parameter.
+ *
  * @typeParam T - The discriminated union type
  * @typeParam Result - The return type of all handler functions (including Default)
  *
@@ -87,7 +93,7 @@ export type Matcher<
  *
  * const describe: MatcherWithDefault<Shape, string> = {
  *   circle: ({ radius }) => `Circle with radius ${radius}`,
- *   Default: () => 'Unknown shape',
+ *   Default: () => 'Unknown shape', // ← cannot inspect which variant fell through
  * };
  * ```
  */
@@ -318,5 +324,11 @@ export type UnionFactory<D extends string, Schema extends UnionSchema<D>> = {
   ];
   readonly variants: ReadonlyArray<keyof Schema & string>;
   readonly discriminant: D;
+  /**
+   * @phantom This property exists **only at the type level** and has no runtime value.
+   * Accessing `factory._union` at runtime returns `undefined`.
+   * It is used exclusively by {@link InferUnion} to extract the union type:
+   * `type MyUnion = InferUnion<typeof factory>`.
+   */
   readonly _union: InferUnionFromSchema<D, Schema>;
 };

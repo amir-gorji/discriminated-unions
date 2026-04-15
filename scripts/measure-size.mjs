@@ -6,7 +6,7 @@
  * Reports two numbers:
  *   1. CANONICAL — the minified whole main-entry bundle, produced by feeding
  *      `src/index.ts` through esbuild with `--bundle --minify`. This is the
- *      number that the PRD §9 cap of 3.0 KB applies to.
+ *      number that the PRD §9 cap of 2.0 KB applies to.
  *   2. PUBLISHED — the actual `lib/index.mjs` and `lib/index.js` shipped to
  *      npm (informational only). ESM keeps whitespace so downstream bundlers
  *      can preserve `/*#__PURE__*` annotations and tree-shake safely.
@@ -16,7 +16,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import esbuild from 'esbuild';
 
-const CAP_BYTES = 3 * 1024; // PRD §9: ≤ 3.0 KB main-entry minified
+const CAP_BYTES = 2 * 1024; // PRD §9: ≤ 2.0 KB main-entry minified
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const entry = path.join(rootDir, 'src/index.ts');

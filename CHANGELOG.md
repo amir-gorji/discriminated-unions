@@ -1,5 +1,19 @@
 # Changelog
 
+## [2.1.0] - 2026-04-13
+
+### Changed
+
+- **`count` and `partition` now skip non-union items** instead of throwing. Nulls, primitives, and plain objects lacking the discriminant property are silently ignored and do not appear in the count or either half of the partition tuple. This makes both functions safe to call on mixed or unvalidated arrays.
+- **`count` uses a `Set` for variant lookup** (was `Array.includes`), giving O(1) membership checks when matching multiple variants.
+- `matchWithDefault` and `MatcherWithDefault` — added a prominent JSDoc note clarifying that `Default` does not receive the triggering variant and has no way to inspect which one fell through.
+- `UnionFactory._union` — annotated as a phantom/type-level-only property; accessing it at runtime returns `undefined`.
+
+### Package
+
+- Added `"engines": { "node": ">=18" }` to `package.json`.
+- Removed the explicit `"types": ["vitest/globals"]` compiler option from `tsconfig.json`.
+
 ## [2.0.1] - 2026-04-12
 
 ### Changed

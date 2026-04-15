@@ -12,8 +12,8 @@ export default defineConfig({
   target: 'es2020',
   esbuildOptions(opts, { format }) {
     if (format === 'esm') {
-      // Preserve whitespace so /*#__PURE__*/ annotations survive — without
-      // them downstream bundlers (webpack, vite) can't tree-shake safely.
+      // Preserve whitespace in ESM so /*#__PURE__*/ annotations survive —
+      // without them downstream bundlers (webpack, Vite) can't tree-shake safely.
       opts.minifyIdentifiers = true;
       opts.minifySyntax = true;
       opts.minifyWhitespace = false;

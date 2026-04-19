@@ -1,5 +1,6 @@
 import {
   Folder,
+  FolderWithDefault,
   InferUnionFromSchema,
   Mapper,
   MapperAll,
@@ -38,6 +39,30 @@ function ensureUnion(
   if (!isUnion(input, discriminant)) fail('Not a union', caller);
 }
 
+function reduce<
+  T extends SampleUnion<Discriminant>,
+  Acc,
+  Discriminant extends PropertyKey,
+>(
+  items: readonly T[],
+  initial: Acc,
+  handlers: Record<string, ((acc: Acc, input: any) => Acc) | undefined>,
+  discriminant: Discriminant,
+  fallback: ((acc: Acc, item: T) => Acc) | undefined,
+  caller: Function,
+): Acc {
+  let acc = initial;
+  for (const item of items) {
+    ensureUnion(item, discriminant, caller);
+    const key = item[discriminant] as string;
+    const handler = Object.prototype.hasOwnProperty.call(handlers, key) ? handlers[key] : undefined;
+    if (handler) acc = handler(acc, item);
+    else if (fallback) acc = fallback(acc, item);
+    else fail('No handler', caller);
+  }
+  return acc;
+}
+
 function dispatch<
   T extends SampleUnion<Discriminant>,
   Result,
@@ -53,7 +78,8 @@ function dispatch<
   fallback?: (payload: Payload) => Result,
   payload?: Payload,
 ): Result {
-  const fn = handlers[union[discriminant] as string];
+  const key = union[discriminant] as string;
+  const fn = Object.prototype.hasOwnProperty.call(handlers, key) ? handlers[key] : undefined;
   if (fn) return fn(union, payload!);
   if (fallback) return fallback(payload!);
   return fail('No handler', dispatch);
@@ -334,19 +360,46 @@ export function fold<
   initial: Acc,
   discriminant: Discriminant = DEFAULT_DISCRIMINANT as Discriminant,
 ): (handlers: Folder<T, Acc, Discriminant>) => Acc {
-  return (handlers) => {
-    let acc = initial;
-    for (const item of items) {
-      ensureUnion(item, discriminant, fold);
-      const key = item[discriminant] as string;
-      const handler = (
-        handlers as Record<string, ((acc: Acc, input: any) => Acc) | undefined>
-      )[key];
-      if (!handler) fail('No handler', fold);
-      acc = handler(acc, item);
-    }
-    return acc;
-  };
+  return (handlers) =>
+    reduce(items, initial, handlers as any, discriminant, undefined, fold);
+}
+
+/**
+ * Partial single-pass aggregator over a collection of discriminated union values,
+ * with a required `Default` fallback for unhandled variants.
+ * Unhandled variants route to `Default`, which receives the full union item.
+ *
+ * @param items - The array of discriminated union values to fold over
+ * @param initial - The initial accumulator value
+ * @param discriminant - The property used to tell variants apart. Defaults to `'type'`.
+ * @returns A curried function that accepts a partial handler map (with required `Default`) and returns the final accumulator
+ *
+ * @example
+ * ```ts
+ * const urgentCount = foldWithDefault(notifications, 0)({
+ *   push: (acc, { urgent }) => acc + (urgent ? 1 : 0),
+ *   Default: (acc, item) => acc,
+ * });
+ * ```
+ */
+export function foldWithDefault<
+  T extends SampleUnion<Discriminant>,
+  Acc,
+  Discriminant extends PropertyKey = 'type',
+>(
+  items: readonly T[],
+  initial: Acc,
+  discriminant: Discriminant = DEFAULT_DISCRIMINANT as Discriminant,
+): (handlers: FolderWithDefault<T, Acc, Discriminant>) => Acc {
+  return (handlers) =>
+    reduce(
+      items,
+      initial,
+      handlers as any,
+      discriminant,
+      handlers.Default,
+      foldWithDefault,
+    );
 }
 
 /**

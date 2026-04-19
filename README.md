@@ -5,7 +5,7 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue)](https://www.typescriptlang.org/)
 [![bundle size](https://img.shields.io/bundlephobia/minzip/dismatch)](https://bundlephobia.com/package/dismatch)
 
-Type-safe discriminated unions for TypeScript. Define once, get constructors, type guards, and exhaustive pattern matching — all from a single schema. Zero dependencies. ~1.7 kB minified.
+Type-safe discriminated unions for TypeScript. Define once, get constructors, type guards, and exhaustive pattern matching — all from a single schema. Zero dependencies. ~1.8 kB minified.
 
 ```ts
 import { createUnion, is, type InferUnion } from 'dismatch';
@@ -49,6 +49,7 @@ area(Shape.circle(5)); // 78.54
     - [`matchWithDefault`](#matchwithdefault)
     - [`map` / `mapAll`](#map--mapall)
     - [`fold`](#fold)
+    - [`foldWithDefault`](#foldwithdefault)
     - [`is`](#is)
     - [`count`](#count)
     - [`partition`](#partition)
@@ -58,6 +59,7 @@ area(Shape.circle(5)); // 78.54
     - [`InferUnion<T>`](#inferuniont)
     - [`TakeDiscriminant<T>`](#takediscriminantt)
     - [`Folder<T, Acc, Discriminant>`](#foldert-acc-discriminant)
+    - [`FolderWithDefault<T, Acc, Discriminant>`](#folderwithdefaultt-acc-discriminant)
   - [Custom Discriminant](#custom-discriminant)
   - [Patterns](#patterns)
     - [Rendering UI](#rendering-ui)
@@ -83,7 +85,7 @@ npm install dismatch
 
 | Capability                                | dismatch                | ts-pattern | unionize       | @effect/match     |
 | ----------------------------------------- | ----------------------- | ---------- | -------------- | ----------------- |
-| Bundle size                               | **~1.7 kB**             | ~2 kB      | unclear        | large (ecosystem) |
+| Bundle size                               | **~1.8 kB**             | ~2 kB      | unclear        | large (ecosystem) |
 | Zero dependencies                         | Yes                     | Yes        | Yes            | No                |
 | Exhaustive matching (compile time)        | Yes                     | Yes        | Yes            | Yes               |
 | Schema-aware runtime validation           | **Yes**                 | No         | No             | No                |
@@ -103,7 +105,7 @@ npm install dismatch
 
 **ts-pattern matches any pattern. dismatch manages discriminated unions.**
 
-Most TypeScript apps live and breathe `{ type: 'x' } | { type: 'y' }`. For that world, dismatch replaces an entire category of hand-written boilerplate with a single schema — constructors, guards, matchers, transforms, and collection ops — in 1.7 kB.
+Most TypeScript apps live and breathe `{ type: 'x' } | { type: 'y' }`. For that world, dismatch replaces an entire category of hand-written boilerplate with a single schema — constructors, guards, matchers, transforms, and collection ops — in 1.8 kB.
 
 **The everyday match — zero ceremony:**
 
@@ -413,6 +415,57 @@ const stats = fold(shapes, { circles: 0, totalArea: 0 })({
 
 Exhaustive, single-pass, and purpose-built — no `reduce` wrapper, no `.exhaustive()` call, no `{ type: '…' }` noise.
 
+### `foldWithDefault`
+
+Partial collection aggregation with a required `Default` fallback. Unlike `fold`, not every variant needs a handler — unhandled variants route to `Default`, which receives the full union item so you can inspect which variant fell through.
+
+```ts
+import { foldWithDefault } from 'dismatch';
+
+type Notification =
+  | { type: 'push'; urgent: boolean; message: string }
+  | { type: 'email'; subject: string }
+  | { type: 'sms'; from: string };
+
+const urgentCount = foldWithDefault(
+  notifications,
+  0,
+)({
+  push: (acc, { urgent }) => acc + (urgent ? 1 : 0),
+  Default: (acc, item) => acc, // email and sms fall through here
+});
+```
+
+`Default` receives the full union item — you can branch on `item.type` to handle specific unmatched variants:
+
+```ts
+const log = foldWithDefault(
+  notifications,
+  [] as string[],
+)({
+  push: (acc, { message }) => [...acc, `[PUSH] ${message}`],
+  Default: (acc, item) => {
+    if (item.type === 'email') return [...acc, `[EMAIL] ${item.subject}`];
+    return acc; // sms silently skipped
+  },
+});
+```
+
+**Custom discriminant:**
+
+```ts
+foldWithDefault(
+  events,
+  0,
+  'kind',
+)({
+  click: (acc, { x, y }) => acc + 1,
+  Default: (acc) => acc,
+});
+```
+
+> **Note:** `foldWithDefault` is standalone-only — it is not available on `createPipeHandlers` or `createUnion` in v2.2.
+
 ### `is`
 
 Value-first type guard for discriminated unions. Covers single-variant and multi-variant narrowing inside `if` blocks.
@@ -563,13 +616,33 @@ type D = TakeDiscriminant<Shape>; // 'type'
 
 ### `Folder<T, Acc, Discriminant>`
 
-Handler map type for `fold` — each handler takes `(accumulator, variantData)` and returns the new accumulator:
+Handler map type for `fold` — each handler takes `(accumulator, variantData)` and returns the new accumulator.
+
+> Most of the time you won't need to import this. TypeScript infers the handler types when you pass them inline to `fold`. Reach for `Folder` only when you need to define or annotate a handler object separately from the call site.
 
 ```ts
 import type { Folder } from 'dismatch';
 
 type ShapeFolder = Folder<Shape, number, 'type'>;
 // { circle: (acc: number, input: { radius: number }) => number; rectangle: ... }
+```
+
+### `FolderWithDefault<T, Acc, Discriminant>`
+
+Handler map type for `foldWithDefault` — variant handlers are optional and `Default` is required. `Default` receives the full union item `T` (not stripped data) so you can inspect which variant fell through.
+
+> Same as `Folder` — you rarely need this explicitly. It's there for when you pre-define a `foldWithDefault` handler object and want TypeScript to check it at the definition site rather than at the call site.
+
+```ts
+import type { FolderWithDefault } from 'dismatch';
+
+type NotificationFolder = FolderWithDefault<Notification, number, 'type'>;
+// {
+//   push?: (acc: number, input: { urgent: boolean; message: string }) => number;
+//   email?: (acc: number, input: { subject: string }) => number;
+//   sms?: (acc: number, input: { from: string }) => number;
+//   Default: (acc: number, item: Notification) => number;
+// }
 ```
 
 ---

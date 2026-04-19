@@ -5,7 +5,10 @@ import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
-const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const rootDir = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  '..',
+);
 const pkg = JSON.parse(
   readFileSync(path.join(rootDir, 'package.json'), 'utf8'),
 );
@@ -15,6 +18,7 @@ const expectedExports = [
   'createPipeHandlers',
   'createUnion',
   'fold',
+  'foldWithDefault',
   'is',
   'isUnion',
   'map',
@@ -33,7 +37,10 @@ const requiredFiles = [
 ];
 
 for (const file of requiredFiles) {
-  assert.ok(existsSync(path.join(rootDir, file)), `Missing built file: ${file}`);
+  assert.ok(
+    existsSync(path.join(rootDir, file)),
+    `Missing built file: ${file}`,
+  );
 }
 
 const packOutput = execFileSync(

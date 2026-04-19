@@ -49,7 +49,7 @@ area(Shape.circle(5)); // 78.54
     - [`matchWithDefault`](#matchwithdefault)
     - [`map` / `mapAll`](#map--mapall)
     - [`fold`](#fold)
-    - [`foldWithDefault`](#foldWithDefault)
+    - [`foldWithDefault`](#foldwithdefault)
     - [`is`](#is)
     - [`count`](#count)
     - [`partition`](#partition)
@@ -464,7 +464,7 @@ foldWithDefault(
 });
 ```
 
-> **Note:** `foldWithDefault` is standalone-only — it is not available on `createPipeHandlers` or `createUnion` in v2.1.
+> **Note:** `foldWithDefault` is standalone-only — it is not available on `createPipeHandlers` or `createUnion` in v2.2.
 
 ### `is`
 

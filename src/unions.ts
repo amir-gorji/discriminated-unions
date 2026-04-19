@@ -55,7 +55,7 @@ function reduce<
   for (const item of items) {
     ensureUnion(item, discriminant, caller);
     const key = item[discriminant] as string;
-    const handler = handlers[key];
+    const handler = Object.prototype.hasOwnProperty.call(handlers, key) ? handlers[key] : undefined;
     if (handler) acc = handler(acc, item);
     else if (fallback) acc = fallback(acc, item);
     else fail('No handler', caller);
@@ -78,7 +78,8 @@ function dispatch<
   fallback?: (payload: Payload) => Result,
   payload?: Payload,
 ): Result {
-  const fn = handlers[union[discriminant] as string];
+  const key = union[discriminant] as string;
+  const fn = Object.prototype.hasOwnProperty.call(handlers, key) ? handlers[key] : undefined;
   if (fn) return fn(union, payload!);
   if (fallback) return fallback(payload!);
   return fail('No handler', dispatch);

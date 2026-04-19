@@ -12,9 +12,13 @@
 - `fold` internally refactored to share a `reduce` helper with `foldWithDefault` — no behaviour change.
 - README: added guidance notes on `Folder` and `FolderWithDefault` clarifying they are advanced-use exports; most callers get full inference without importing them.
 
+### Fixed
+
+- **Prototype pollution guard in `reduce` and `dispatch`** — discriminant values that match inherited `Object.prototype` properties (e.g. `toString`, `constructor`, `__proto__`) no longer resolve to those inherited methods and attempt to call them as handlers. Both helpers now use `Object.prototype.hasOwnProperty.call` before treating a lookup as a match, so such values correctly fall through to the `Default` / `fallback` handler (or throw "No handler" if none is provided). Affects `fold`, `foldWithDefault`, `match`, and `matchWithDefault`.
+
 ### Bundle size
 
-- Canonical metric (`esbuild --bundle --minify`, non-gzipped): **1,779 B (1.74 KB)** — up from 1,660 B in 2.1.0 (+119 B for `foldWithDefault`).
+- Canonical metric (`esbuild --bundle --minify`, non-gzipped): **1,731 B (1.69 KB)** — up from 1,660 B in 2.1.0 (+71 B net; `foldWithDefault` added 119 B, prototype-guard fix saved 48 B).
 
 ## [2.1.0] - 2026-04-13
 

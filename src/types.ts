@@ -188,6 +188,32 @@ export type Folder<
 };
 
 /**
+ * Partial handler map for folding a collection of discriminated union values,
+ * with a required `Default` fallback for unhandled variants.
+ * Unlike {@link Folder}, individual variant handlers are optional. When a variant
+ * has no handler, `Default` is called with the full union item so the caller
+ * can inspect which variant fell through.
+ *
+ * @typeParam T - The discriminated union type
+ * @typeParam Acc - The accumulator type
+ *
+ * @example
+ * ```ts
+ * const urgentCount = foldWithDefault(notifications, 0)({
+ *   push: (acc, { urgent }) => acc + (urgent ? 1 : 0),
+ *   Default: (acc, item) => acc,
+ * });
+ * ```
+ */
+export type FolderWithDefault<
+  T extends SampleUnion<Discriminant>,
+  Acc,
+  Discriminant extends PropertyKey,
+> = Partial<Folder<T, Acc, Discriminant>> & {
+  Default: (acc: Acc, item: T) => Acc;
+};
+
+/**
  * Flattens an intersection of object types into a single object type.
  * `{ a: 1 } & { b: 2 }` becomes `{ a: 1; b: 2 }`.
  */
@@ -308,13 +334,9 @@ export type UnionFactory<D extends string, Schema extends UnionSchema<D>> = {
     initial: Acc,
   ) => (handlers: Folder<InferUnionFromSchema<D, Schema>, Acc, D>) => Acc;
   readonly count: (
-    variants:
-      | (keyof Schema & string)
-      | ReadonlyArray<keyof Schema & string>,
+    variants: (keyof Schema & string) | ReadonlyArray<keyof Schema & string>,
   ) => (items: ReadonlyArray<InferUnionFromSchema<D, Schema>>) => number;
-  readonly partition: <
-    U extends keyof Schema & string = keyof Schema & string,
-  >(
+  readonly partition: <U extends keyof Schema & string = keyof Schema & string>(
     variants: U | readonly U[],
   ) => (
     items: ReadonlyArray<InferUnionFromSchema<D, Schema>>,

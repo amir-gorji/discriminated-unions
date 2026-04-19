@@ -4,6 +4,7 @@ export {
   map,
   mapAll,
   fold,
+  foldWithDefault,
   count,
   partition,
   createPipeHandlers,
@@ -11,4 +12,9 @@ export {
   is,
   isUnion,
 } from './unions';
-export type { TakeDiscriminant, InferUnion, Folder } from './types';
+export type {
+  TakeDiscriminant,
+  InferUnion,
+  Folder,
+  FolderWithDefault,
+} from './types';

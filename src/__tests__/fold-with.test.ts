@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { foldWithDefault } from '../unions';
+import { foldWithDefault, createPipeHandlers, createUnion } from '../unions';
 
 type Notification =
   | { type: 'push'; urgent: boolean; message: string }
@@ -145,5 +145,51 @@ describe('foldWithDefault — custom discriminant', () => {
       Default: (acc, item) => acc + item.kind,
     });
     expect(result).toBe('Rexcatbird');
+  });
+});
+
+describe('foldWithDefault — createPipeHandlers', () => {
+  const notifOps = createPipeHandlers<Notification, 'type'>('type');
+
+  it('partial handling: specified variant runs handler, others hit Default', () => {
+    const items: Notification[] = [
+      { type: 'push', urgent: true, message: 'Alert' },
+      { type: 'email', subject: 'Hello' },
+      { type: 'sms', from: '+1' },
+    ];
+    const result = notifOps.foldWithDefault(items, 0)({
+      push: (acc, { urgent }) => acc + (urgent ? 1 : 0),
+      Default: (acc) => acc,
+    });
+    expect(result).toBe(1);
+  });
+
+  it('Default-only: all items routed to Default', () => {
+    const items: Notification[] = [
+      { type: 'push', urgent: false, message: 'x' },
+      { type: 'email', subject: 'y' },
+    ];
+    const seen: string[] = [];
+    notifOps.foldWithDefault(items, 0)({
+      Default: (acc, item) => { seen.push(item.type); return acc; },
+    });
+    expect(seen).toEqual(['push', 'email']);
+  });
+});
+
+describe('foldWithDefault — createUnion', () => {
+  const Notif = createUnion('type', {
+    push: (urgent: boolean, message: string) => ({ urgent, message }),
+    email: (subject: string) => ({ subject }),
+    sms: (from: string) => ({ from }),
+  });
+
+  it('works via bound factory method', () => {
+    const items = [Notif.push(true, 'A'), Notif.email('B'), Notif.push(false, 'C')];
+    const result = Notif.foldWithDefault(items, 0)({
+      push: (acc, { urgent }) => acc + (urgent ? 1 : 0),
+      Default: (acc) => acc,
+    });
+    expect(result).toBe(1);
   });
 });

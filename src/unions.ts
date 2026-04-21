@@ -6,6 +6,7 @@ import {
   MapperAll,
   Matcher,
   MatcherWithDefault,
+  ReservedUnionKeys,
   SampleUnion,
   TakeDiscriminant,
   UnionSchema,
@@ -489,7 +490,7 @@ export function partition<
  *
  * @param discriminant - The property used to tell variants apart (e.g. `'type'` or `'kind'`)
  * @returns An object with handler-first utilities including `match`, `matchWithDefault`,
- *   `map`, `mapAll`, `fold`, `count`, `partition`, and `is` — each returning a reusable
+ *   `map`, `mapAll`, `fold`, `foldWithDefault`, `count`, `partition`, and `is` — each returning a reusable
  *   function that accepts the input value
  *
  * @example
@@ -561,6 +562,11 @@ export function createPipeHandlers<
       (handlers: Folder<T, Acc, Discriminant>): Acc =>
         fold(items, initial, discriminant)(handlers),
 
+    foldWithDefault:
+      <Acc>(items: readonly T[], initial: Acc) =>
+      (handlers: FolderWithDefault<T, Acc, Discriminant>): Acc =>
+        foldWithDefault(items, initial, discriminant)(handlers),
+
     count:
       (variants: T[Discriminant] | readonly T[Discriminant][]) =>
       (items: readonly T[]): number =>
@@ -616,13 +622,23 @@ export function createPipeHandlers<
  * });
  * ```
  */
+const RESERVED_UNION_KEYS = new Set<string>([
+  'is', 'isKnown', 'match', 'matchWithDefault', 'map', 'mapAll',
+  'fold', 'count', 'partition', 'variants', 'discriminant', '_union',
+]);
+
 export function createUnion<D extends string, Schema extends UnionSchema<D>>(
   discriminant: D,
-  schema: Schema,
+  schema: [keyof Schema & string & ReservedUnionKeys] extends [never] ? Schema : never,
 ): UnionFactory<D, Schema> {
   type Union = InferUnionFromSchema<D, Schema>;
 
   const keys = Object.keys(schema) as (keyof Schema & string)[];
+
+  for (const key of keys) {
+    if (RESERVED_UNION_KEYS.has(key))
+      throw new Error(`createUnion: "${key}" is a reserved variant name`);
+  }
 
   const constructors: any = {};
 

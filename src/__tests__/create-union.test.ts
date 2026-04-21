@@ -78,7 +78,9 @@ describe('createUnion', () => {
     });
 
     it('should return false for objects with wrong discriminant value', () => {
-      expect(Shape.is('circle')({ type: 'hexagon', sides: 6 } as any)).toBe(false);
+      expect(Shape.is('circle')({ type: 'hexagon', sides: 6 } as any)).toBe(
+        false,
+      );
     });
 
     it('should work with custom discriminant', () => {
@@ -191,7 +193,11 @@ describe('createUnion', () => {
     });
 
     it('should return a reusable function', () => {
-      const shapes = [Shape.circle(1), Shape.rectangle(2, 3), Shape.triangle(4, 5)];
+      const shapes = [
+        Shape.circle(1),
+        Shape.rectangle(2, 3),
+        Shape.triangle(4, 5),
+      ];
       const areas = shapes.map(getArea);
       expect(areas[0]).toBeCloseTo(Math.PI);
       expect(areas[1]).toBe(6);
@@ -330,9 +336,15 @@ describe('createUnion', () => {
         cat: ({ lives }) => ({ lives: lives + 1 }),
         bird: ({ canFly }) => ({ canFly: !canFly }),
       });
-      expect(transform(Animal.dog('Rex'))).toEqual({ kind: 'dog', name: 'REX' });
+      expect(transform(Animal.dog('Rex'))).toEqual({
+        kind: 'dog',
+        name: 'REX',
+      });
       expect(transform(Animal.cat(9))).toEqual({ kind: 'cat', lives: 10 });
-      expect(transform(Animal.bird(true))).toEqual({ kind: 'bird', canFly: false });
+      expect(transform(Animal.bird(true))).toEqual({
+        kind: 'bird',
+        canFly: false,
+      });
     });
   });
 
@@ -387,7 +399,9 @@ describe('createUnion', () => {
       });
       expect(describe(Status.idle())).toBe('idle');
       expect(describe(Status.success('done'))).toBe('ok: done');
-      expect(describe(Status.failure('not found', 404))).toBe('err 404: not found');
+      expect(describe(Status.failure('not found', 404))).toBe(
+        'err 404: not found',
+      );
     });
   });
 
@@ -413,6 +427,46 @@ describe('createUnion', () => {
     it('constructed values work with standalone isUnion', async () => {
       const { isUnion } = await import('../unions');
       expect(isUnion(Shape.circle(5))).toBe(true);
+    });
+  });
+
+  describe('reserved variant names', () => {
+    const reservedKeys = [
+      'is',
+      'isKnown',
+      'match',
+      'matchWithDefault',
+      'map',
+      'mapAll',
+      'fold',
+      'count',
+      'partition',
+      'variants',
+      'discriminant',
+      '_union',
+    ] as const;
+
+    it.each(reservedKeys)(
+      'throws at runtime when variant is named "%s"',
+      (key) => {
+        expect(() =>
+          // @ts-expect-error — 'match' is a reserved variant name
+          createUnion('type', { [key]: () => ({}) } as any),
+        ).toThrow(`createUnion: "${key}" is a reserved variant name`);
+      },
+    );
+
+    it('does not throw for non-reserved variant names', () => {
+      expect(() =>
+        createUnion('type', { foo: () => ({}), bar: () => ({}) }),
+      ).not.toThrow();
+    });
+
+    it('type-level: reserved key causes type error', () => {
+      expect(() =>
+        // @ts-expect-error — 'match' is a reserved variant name
+        createUnion('type', { match: () => ({}) }),
+      ).toThrow('reserved');
     });
   });
 });

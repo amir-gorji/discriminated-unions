@@ -1,5 +1,15 @@
 # Changelog
 
+## [2.3.0] - 2026-04-20
+
+### Added
+
+- **`createPipeHandlers().foldWithDefault`** and **`createUnion().foldWithDefault`** — `foldWithDefault` is now available as a curried, handlers-first method on both `createPipeHandlers` and `createUnion`, mirroring how `fold` was already exposed. Delegates to the standalone `foldWithDefault` with no logic duplication — tree-shakable by design.
+
+### Bundle size
+
+- Canonical metric (`esbuild --bundle --minify`, non-gzipped): **1,926 B (1.88 KB)** — up from 1,731 B in 2.2.0 (+195 B for the `createPipeHandlers`/`createUnion` wiring).
+
 ## [2.2.0] - 2026-04-19
 
 ### Added

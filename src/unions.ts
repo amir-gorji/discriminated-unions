@@ -629,7 +629,9 @@ const RESERVED_UNION_KEYS = new Set<string>([
 
 export function createUnion<D extends string, Schema extends UnionSchema<D>>(
   discriminant: D,
-  schema: [keyof Schema & string & ReservedUnionKeys] extends [never] ? Schema : never,
+  schema: string extends keyof Schema
+    ? Schema
+    : [keyof Schema & string & ReservedUnionKeys] extends [never] ? Schema : never,
 ): UnionFactory<D, Schema> {
   type Union = InferUnionFromSchema<D, Schema>;
 

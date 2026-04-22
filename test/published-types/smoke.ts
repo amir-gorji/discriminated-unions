@@ -32,8 +32,8 @@ const size: number = match(trimmed)({
 label(trimmed);
 size;
 
-// @ts-expect-error createUnion injects the discriminant automatically
 createUnion('type', {
+  // @ts-expect-error createUnion injects the discriminant automatically
   broken: () => ({ type: 'broken' }),
 });
 

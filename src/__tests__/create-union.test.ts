@@ -439,6 +439,7 @@ describe('createUnion', () => {
       'map',
       'mapAll',
       'fold',
+      'foldWithDefault',
       'count',
       'partition',
       'variants',

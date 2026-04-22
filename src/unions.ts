@@ -624,7 +624,7 @@ export function createPipeHandlers<
  */
 const RESERVED_UNION_KEYS = new Set<string>([
   'is', 'isKnown', 'match', 'matchWithDefault', 'map', 'mapAll',
-  'fold', 'count', 'partition', 'variants', 'discriminant', '_union',
+  'fold', 'foldWithDefault', 'count', 'partition', 'variants', 'discriminant', '_union',
 ]);
 
 export function createUnion<D extends string, Schema extends UnionSchema<D>>(

@@ -5,7 +5,7 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue)](https://www.typescriptlang.org/)
 [![bundle size](https://img.shields.io/bundlephobia/minzip/dismatch)](https://bundlephobia.com/package/dismatch)
 
-Type-safe discriminated unions for TypeScript. Define once, get constructors, type guards, and exhaustive pattern matching — all from a single schema. Zero dependencies. ~1.8 kB minified.
+Type-safe discriminated unions for TypeScript. Define once, get constructors, type guards, and exhaustive pattern matching — all from a single schema. Zero dependencies. ~2 kB minified.
 
 ```ts
 import { createUnion, is, type InferUnion } from 'dismatch';
@@ -85,7 +85,7 @@ npm install dismatch
 
 | Capability                                | dismatch                | ts-pattern | unionize       | @effect/match     |
 | ----------------------------------------- | ----------------------- | ---------- | -------------- | ----------------- |
-| Bundle size                               | **~1.8 kB**             | ~2 kB      | unclear        | large (ecosystem) |
+| Bundle size                               | **~2 kB**               | ~7.7 kB    | unclear        | large (ecosystem) |
 | Zero dependencies                         | Yes                     | Yes        | Yes            | No                |
 | Exhaustive matching (compile time)        | Yes                     | Yes        | Yes            | Yes               |
 | Schema-aware runtime validation           | **Yes**                 | No         | No             | No                |
@@ -464,7 +464,7 @@ foldWithDefault(
 });
 ```
 
-> **Note:** `foldWithDefault` is standalone-only — it is not available on `createPipeHandlers` or `createUnion` in v2.2.
+`foldWithDefault` is also available as a curried method on `createPipeHandlers` and `createUnion` — see [`createPipeHandlers`](#createpipehandlers).
 
 ### `is`
 
@@ -547,7 +547,7 @@ isUnion({ kind: 'click' }, 'kind'); // true — custom discriminant
 
 ### `createPipeHandlers`
 
-Handlers-first curried order for pipe composition. Define handlers once, get back a reusable function. Exposes `match`, `matchWithDefault`, `map`, `mapAll`, `fold`, `count`, `partition`, and `is` — all bound to the union type and discriminant, so no generics are needed at call sites.
+Handlers-first curried order for pipe composition. Define handlers once, get back a reusable function. Exposes `match`, `matchWithDefault`, `map`, `mapAll`, `fold`, `foldWithDefault`, `count`, `partition`, and `is` — all bound to the union type and discriminant, so no generics are needed at call sites.
 
 ```ts
 import { createPipeHandlers } from 'dismatch';

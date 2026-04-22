@@ -229,6 +229,21 @@ export type TakeDiscriminant<T, K extends keyof T = keyof T> = K extends keyof T
 
 type SchemaData<D extends string> = object & { [Disc in D]?: never };
 
+export type ReservedUnionKeys =
+  | 'is'
+  | 'isKnown'
+  | 'match'
+  | 'matchWithDefault'
+  | 'map'
+  | 'mapAll'
+  | 'fold'
+  | 'foldWithDefault'
+  | 'count'
+  | 'partition'
+  | 'variants'
+  | 'discriminant'
+  | '_union';
+
 export type UnionSchema<D extends string> = Record<
   string,
   (...args: any[]) => SchemaData<D>
@@ -333,6 +348,10 @@ export type UnionFactory<D extends string, Schema extends UnionSchema<D>> = {
     items: ReadonlyArray<InferUnionFromSchema<D, Schema>>,
     initial: Acc,
   ) => (handlers: Folder<InferUnionFromSchema<D, Schema>, Acc, D>) => Acc;
+  readonly foldWithDefault: <Acc>(
+    items: ReadonlyArray<InferUnionFromSchema<D, Schema>>,
+    initial: Acc,
+  ) => (handlers: FolderWithDefault<InferUnionFromSchema<D, Schema>, Acc, D>) => Acc;
   readonly count: (
     variants: (keyof Schema & string) | ReadonlyArray<keyof Schema & string>,
   ) => (items: ReadonlyArray<InferUnionFromSchema<D, Schema>>) => number;

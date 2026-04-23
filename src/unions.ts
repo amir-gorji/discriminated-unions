@@ -56,7 +56,7 @@ function reduce<
   for (const item of items) {
     ensureUnion(item, discriminant, caller);
     const key = item[discriminant] as string;
-    const handler = Object.prototype.hasOwnProperty.call(handlers, key) ? handlers[key] : undefined;
+    const handler = Object.hasOwn(handlers, key) ? handlers[key] : undefined;
     if (handler) acc = handler(acc, item);
     else if (fallback) acc = fallback(acc, item);
     else fail('No handler', caller);
@@ -80,7 +80,7 @@ function dispatch<
   payload?: Payload,
 ): Result {
   const key = union[discriminant] as string;
-  const fn = Object.prototype.hasOwnProperty.call(handlers, key) ? handlers[key] : undefined;
+  const fn = Object.hasOwn(handlers, key) ? handlers[key] : undefined;
   if (fn) return fn(union, payload!);
   if (fallback) return fallback(payload!);
   return fail('No handler', dispatch);
@@ -108,8 +108,8 @@ export function isUnion<Discriminant extends PropertyKey>(
   input: unknown,
   discriminant: Discriminant = DEFAULT_DISCRIMINANT as Discriminant,
 ): input is SampleUnion<Discriminant> {
-  return !!(
-    input &&
+  return (
+    !!input &&
     typeof input === 'object' &&
     !Array.isArray(input) &&
     typeof (input as Record<PropertyKey, unknown>)[discriminant] === 'string'
@@ -427,9 +427,7 @@ export function count<
   variants: T[Discriminant] | readonly T[Discriminant][],
   discriminant: Discriminant = DEFAULT_DISCRIMINANT as Discriminant,
 ): number {
-  const keySet = new Set(
-    (Array.isArray(variants) ? variants : [variants]) as readonly string[],
-  );
+  const keySet = new Set(([] as string[]).concat(variants as any));
   let n = 0;
   for (const item of items) {
     if (!isUnion(item, discriminant)) continue;
@@ -467,9 +465,7 @@ export function partition<
   Extract<T, { [K in Discriminant]: U }>[],
   Exclude<T, { [K in Discriminant]: U }>[],
 ] {
-  const keySet = new Set(
-    (Array.isArray(variants) ? variants : [variants]) as readonly string[],
-  );
+  const keySet = new Set(([] as string[]).concat(variants as any));
   const matched: any[] = [];
   const rest: any[] = [];
   for (const item of items) {
@@ -623,15 +619,28 @@ export function createPipeHandlers<
  * ```
  */
 const RESERVED_UNION_KEYS = new Set<string>([
-  'is', 'isKnown', 'match', 'matchWithDefault', 'map', 'mapAll',
-  'fold', 'foldWithDefault', 'count', 'partition', 'variants', 'discriminant', '_union',
+  'is',
+  'isKnown',
+  'match',
+  'matchWithDefault',
+  'map',
+  'mapAll',
+  'fold',
+  'foldWithDefault',
+  'count',
+  'partition',
+  'variants',
+  'discriminant',
+  '_union',
 ]);
 
 export function createUnion<D extends string, Schema extends UnionSchema<D>>(
   discriminant: D,
   schema: string extends keyof Schema
     ? Schema
-    : [keyof Schema & string & ReservedUnionKeys] extends [never] ? Schema : never,
+    : [keyof Schema & string & ReservedUnionKeys] extends [never]
+      ? Schema
+      : never,
 ): UnionFactory<D, Schema> {
   type Union = InferUnionFromSchema<D, Schema>;
 
@@ -639,7 +648,7 @@ export function createUnion<D extends string, Schema extends UnionSchema<D>>(
 
   for (const key of keys) {
     if (RESERVED_UNION_KEYS.has(key))
-      throw new Error(`createUnion: "${key}" is a reserved variant name`);
+      throw new Error(`createUnion: "${key}" is reserved`);
   }
 
   const constructors: any = {};

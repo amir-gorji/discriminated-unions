@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.4.0] - 2026-04-23
+
+### Added
+
+- **`dismatch/remote-data`** — built-in remote data module. Exports the `RemoteData<T, E>` union type (`Idle | Loading | Refreshing<T> | Ok<T> | Failed<E>`) and a `RemoteData` constructor object (`idle`, `loading`, `refreshing`, `ok`, `failed`). Importable as a standalone sub-entry-point (`import { RemoteData } from 'dismatch/remote-data'`) — zero impact on the main bundle for consumers who don't use it.
+
 ## [2.3.0] - 2026-04-20
 
 ### Added

@@ -34,6 +34,8 @@ const requiredFiles = [
   pkg.types,
   pkg.exports['.'].import.types,
   pkg.exports['.'].require.types,
+  pkg.exports['./remote-data'].import.types,
+  pkg.exports['./remote-data'].require.types,
 ];
 
 for (const file of requiredFiles) {
@@ -67,6 +69,10 @@ for (const file of [
   'lib/index.mjs',
   'lib/index.d.ts',
   'lib/index.d.mts',
+  'lib/remote-data.js',
+  'lib/remote-data.mjs',
+  'lib/remote-data.d.ts',
+  'lib/remote-data.d.mts',
 ]) {
   assert.ok(packedFiles.has(file), `Missing packed file: ${file}`);
 }
@@ -90,5 +96,24 @@ assert.deepEqual(
   Object.keys(esm).sort(),
   'CJS and ESM exports are out of sync',
 );
+
+const expectedRemoteDataExports = [
+  'Failed',
+  'Idle',
+  'Loading',
+  'Ok',
+  'RefreshingType',
+  'RemoteData',
+].sort();
+
+const rdCjs = require(path.join(rootDir, pkg.exports['./remote-data'].require.default));
+const rdEsm = await import(pathToFileURL(path.join(rootDir, pkg.exports['./remote-data'].import.default)).href);
+
+const rdCjsRuntime = Object.keys(rdCjs).sort();
+const rdEsmRuntime = Object.keys(rdEsm).sort();
+
+assert.ok(rdCjsRuntime.includes('RemoteData'), 'remote-data CJS missing RemoteData export');
+assert.ok(rdEsmRuntime.includes('RemoteData'), 'remote-data ESM missing RemoteData export');
+assert.deepEqual(rdCjsRuntime, rdEsmRuntime, 'remote-data CJS and ESM exports are out of sync');
 
 console.log('Packed package surface verified.');

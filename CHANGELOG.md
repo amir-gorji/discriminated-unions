@@ -1,5 +1,12 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+
+- **Build target bumped to `es2022`** — `tsup.config.ts` now targets ES2022 (was ES2020), enabling native output for features like class static blocks and `at()`.
+- **`dismatch/remote-data` package verification tightened** — `verify-package.mjs` now asserts that the CJS and ESM builds export *exactly* `['RemoteData']` (strict `deepEqual`) rather than checking for the presence of individual named exports (`Failed`, `Idle`, `Loading`, `Ok`, `RefreshingType`, `RemoteData`). This enforces that internal variant constructors are not accidentally re-exported.
+
 ## [2.4.0] - 2026-04-23
 
 ### Added

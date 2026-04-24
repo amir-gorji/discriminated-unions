@@ -65,6 +65,7 @@ area(Shape.circle(5)); // 78.54
     - [Rendering UI](#rendering-ui)
     - [Reducer](#reducer)
     - [Pipe Composition](#pipe-composition)
+  - [RemoteData](#remotedata)
   - [Clean Stack Traces](#clean-stack-traces)
   - [Contributing](#contributing)
   - [License](#license)
@@ -726,6 +727,31 @@ const result = pipe(
     rectangle: () => 'flat',
   }),
 );
+```
+
+---
+
+## RemoteData
+
+`dismatch/remote-data` ships a ready-made remote data union — `Idle | Loading | Refreshing<T> | Ok<T> | Failed<E>` — with constructors already wired up.
+
+```ts
+import { RemoteData, type RemoteData as RD } from 'dismatch/remote-data';
+import { match } from 'dismatch';
+
+type State = RD<User[]>;
+
+let state: State = RemoteData.idle();
+state = RemoteData.loading();
+state = RemoteData.ok(users);
+
+const content = match(state)({
+  idle:       ()         => 'Click to load',
+  loading:    ()         => 'Loading…',
+  refreshing: ({ data }) => `Refreshing ${data.length} items…`,
+  ok:         ({ data }) => `Loaded ${data.length} items`,
+  failed:     ({ error }) => `Error: ${error.message}`,
+});
 ```
 
 ---

@@ -1,7 +1,7 @@
 import { defineConfig } from 'tsup';
 
 export default defineConfig({
-  entry: ['src/index.ts'],
+  entry: ['src/index.ts', 'src/remote-data.ts'],
   format: ['cjs', 'esm'],
   dts: true,
   clean: true,
@@ -9,7 +9,7 @@ export default defineConfig({
   outDir: 'lib',
   splitting: false,
   treeshake: true,
-  target: 'es2020',
+  target: 'es2022',
   esbuildOptions(opts, { format }) {
     if (format === 'esm') {
       // Preserve whitespace in ESM so /*#__PURE__*/ annotations survive —

@@ -451,7 +451,7 @@ describe('createUnion', () => {
       'throws at runtime when variant is named "%s"',
       (key) => {
         expect(() => createUnion('type', { [key]: () => ({}) } as any)).toThrow(
-          `createUnion: "${key}" is a reserved variant name`,
+          `createUnion: "${key}" is reserved`,
         );
       },
     );

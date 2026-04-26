@@ -90,7 +90,7 @@ describe('fold — standalone', () => {
         rectangle: (acc: number) => acc,
         triangle: (acc: number) => acc,
       } as any),
-    ).toThrow('No handler');
+    ).toThrow(/unknown variant "circle"/);
   });
 });
 

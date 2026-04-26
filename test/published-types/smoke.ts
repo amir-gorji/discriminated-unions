@@ -32,9 +32,36 @@ const size: number = match(trimmed)({
 label(trimmed);
 size;
 
+const DefaultResult = createUnion({
+  ok: (data: string) => ({ data }),
+  error: (message: string) => ({ message }),
+});
+
+type DefaultResult = InferUnion<typeof DefaultResult>;
+
+const defaultValue: DefaultResult = DefaultResult.ok(' hello ');
+const defaultLabel = DefaultResult.match({
+  ok: ({ data }) => data.trim(),
+  error: ({ message }) => message,
+});
+
+const okType: 'ok' = DefaultResult.ok('ok').type;
+
+defaultLabel(defaultValue);
+okType;
+
 createUnion('type', {
-  // @ts-expect-error createUnion injects the discriminant automatically
-  broken: () => ({ type: 'broken' }),
+  broken: () => ({
+    // @ts-expect-error createUnion injects the discriminant automatically
+    type: 'broken',
+  }),
+});
+
+createUnion({
+  broken: () => ({
+    // @ts-expect-error createUnion injects the default "type" discriminant automatically
+    type: 'broken',
+  }),
 });
 
 Result.map({

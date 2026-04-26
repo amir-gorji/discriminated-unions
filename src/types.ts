@@ -103,7 +103,9 @@ export type MatcherWithDefault<
   Discriminant extends PropertyKey,
   Payload extends any = never,
 > = Partial<Matcher<T, Result, Discriminant, Payload>> & {
-  Default: (payload: Payload) => Result;
+  Default: (
+    ...args: [Payload] extends [never] ? [] : [payload: Payload]
+  ) => Result;
 };
 
 /**
@@ -129,7 +131,11 @@ export type Mapper<
   Payload extends any = never,
 > = {
   [K in T[Discriminant]]?: T extends Model<K, infer Data, Discriminant>
-    ? (input: Data, payload: Payload) => Omit<Data, Discriminant>
+    ? (
+        ...inputs: [Payload] extends [never]
+          ? [input: Data]
+          : [input: Data, payload: Payload]
+      ) => Omit<Data, Discriminant>
     : never;
 };
 
@@ -156,7 +162,11 @@ export type MapperAll<
   Payload extends any = never,
 > = {
   [K in T[Discriminant]]: T extends Model<K, infer Data, Discriminant>
-    ? (input: Data, payload: Payload) => Omit<Data, Discriminant>
+    ? (
+        ...inputs: [Payload] extends [never]
+          ? [input: Data]
+          : [input: Data, payload: Payload]
+      ) => Omit<Data, Discriminant>
     : never;
 };
 
@@ -214,6 +224,84 @@ export type FolderWithDefault<
 };
 
 /**
+ * Async exhaustive handler map. Like {@link Matcher}, but each handler may
+ * return either `Result` or `Promise<Result>`. The unified return type is
+ * `Promise<Result>` — never `Promise<A> | Promise<B>`.
+ */
+export type AsyncMatcher<
+  T extends SampleUnion<Discriminant>,
+  Result,
+  Discriminant extends PropertyKey,
+  Payload extends any = never,
+> = {
+  [K in T[Discriminant]]: T extends Model<K, infer Data, Discriminant>
+    ? (
+        ...inputs: [Payload] extends [never]
+          ? [input: Data]
+          : [input: Data, payload: Payload]
+      ) => Result | Promise<Result>
+    : never;
+};
+
+/**
+ * Async partial handler map with a required `Default` fallback.
+ * Each handler (including `Default`) may return `Result` or `Promise<Result>`.
+ */
+export type AsyncMatcherWithDefault<
+  T extends SampleUnion<Discriminant>,
+  Result,
+  Discriminant extends PropertyKey,
+  Payload extends any = never,
+> = Partial<AsyncMatcher<T, Result, Discriminant, Payload>> & {
+  Default: (
+    ...args: [Payload] extends [never] ? [] : [payload: Payload]
+  ) => Result | Promise<Result>;
+};
+
+/**
+ * Async partial transform. Like {@link Mapper}, but handlers may return a Promise.
+ * Variants without a handler pass through unchanged.
+ */
+export type AsyncMapper<
+  T extends SampleUnion<Discriminant>,
+  Discriminant extends PropertyKey,
+  Payload extends any = never,
+> = {
+  [K in T[Discriminant]]?: T extends Model<K, infer Data, Discriminant>
+    ? (
+        ...inputs: [Payload] extends [never]
+          ? [input: Data]
+          : [input: Data, payload: Payload]
+      ) => Omit<Data, Discriminant> | Promise<Omit<Data, Discriminant>>
+    : never;
+};
+
+/**
+ * Async exhaustive folder. Each handler receives `(acc, data)` and returns
+ * `Acc` or `Promise<Acc>`. Sequential execution (acc threads through `await`).
+ */
+export type AsyncFolder<
+  T extends SampleUnion<Discriminant>,
+  Acc,
+  Discriminant extends PropertyKey,
+> = {
+  [K in T[Discriminant]]: T extends Model<K, infer Data, Discriminant>
+    ? (acc: Acc, input: Data) => Acc | Promise<Acc>
+    : never;
+};
+
+/**
+ * Async partial folder with `Default` fallback. Sequential execution.
+ */
+export type AsyncFolderWithDefault<
+  T extends SampleUnion<Discriminant>,
+  Acc,
+  Discriminant extends PropertyKey,
+> = Partial<AsyncFolder<T, Acc, Discriminant>> & {
+  Default: (acc: Acc, item: T) => Acc | Promise<Acc>;
+};
+
+/**
  * Flattens an intersection of object types into a single object type.
  * `{ a: 1 } & { b: 2 }` becomes `{ a: 1; b: 2 }`.
  */
@@ -234,10 +322,16 @@ export type ReservedUnionKeys =
   | 'isKnown'
   | 'match'
   | 'matchWithDefault'
+  | 'matchAsync'
+  | 'matchWithDefaultAsync'
+  | 'matchAllAsync'
   | 'map'
   | 'mapAll'
+  | 'mapAsync'
   | 'fold'
   | 'foldWithDefault'
+  | 'foldAsync'
+  | 'foldWithDefaultAsync'
   | 'count'
   | 'partition'
   | 'variants'
@@ -344,6 +438,42 @@ export type UnionFactory<D extends string, Schema extends UnionSchema<D>> = {
       ? [input: InferUnionFromSchema<D, Schema>]
       : [input: InferUnionFromSchema<D, Schema>, payload: Payload]
   ) => InferUnionFromSchema<D, Schema>;
+  readonly matchAsync: <U, Payload extends any = never>(
+    handlers: AsyncMatcher<InferUnionFromSchema<D, Schema>, U, D, Payload>,
+  ) => (
+    ...inputs: [Payload] extends [never]
+      ? [input: InferUnionFromSchema<D, Schema>]
+      : [input: InferUnionFromSchema<D, Schema>, payload: Payload]
+  ) => Promise<U>;
+  readonly matchWithDefaultAsync: <U, Payload extends any = never>(
+    handlers: AsyncMatcherWithDefault<
+      InferUnionFromSchema<D, Schema>,
+      U,
+      D,
+      Payload
+    >,
+  ) => (
+    ...inputs: [Payload] extends [never]
+      ? [input: InferUnionFromSchema<D, Schema>]
+      : [input: InferUnionFromSchema<D, Schema>, payload: Payload]
+  ) => Promise<U>;
+  readonly matchAllAsync: <U, Payload extends any = never>(
+    handlers: AsyncMatcher<InferUnionFromSchema<D, Schema>, U, D, Payload>,
+  ) => (
+    ...inputs: [Payload] extends [never]
+      ? [items: ReadonlyArray<InferUnionFromSchema<D, Schema>>]
+      : [
+          items: ReadonlyArray<InferUnionFromSchema<D, Schema>>,
+          payload: Payload,
+        ]
+  ) => Promise<U[]>;
+  readonly mapAsync: <Payload extends any = never>(
+    handlers: AsyncMapper<InferUnionFromSchema<D, Schema>, D, Payload>,
+  ) => (
+    ...inputs: [Payload] extends [never]
+      ? [input: InferUnionFromSchema<D, Schema>]
+      : [input: InferUnionFromSchema<D, Schema>, payload: Payload]
+  ) => Promise<InferUnionFromSchema<D, Schema>>;
   readonly fold: <Acc>(
     items: ReadonlyArray<InferUnionFromSchema<D, Schema>>,
     initial: Acc,
@@ -352,6 +482,18 @@ export type UnionFactory<D extends string, Schema extends UnionSchema<D>> = {
     items: ReadonlyArray<InferUnionFromSchema<D, Schema>>,
     initial: Acc,
   ) => (handlers: FolderWithDefault<InferUnionFromSchema<D, Schema>, Acc, D>) => Acc;
+  readonly foldAsync: <Acc>(
+    items: ReadonlyArray<InferUnionFromSchema<D, Schema>>,
+    initial: Acc,
+  ) => (
+    handlers: AsyncFolder<InferUnionFromSchema<D, Schema>, Acc, D>,
+  ) => Promise<Acc>;
+  readonly foldWithDefaultAsync: <Acc>(
+    items: ReadonlyArray<InferUnionFromSchema<D, Schema>>,
+    initial: Acc,
+  ) => (
+    handlers: AsyncFolderWithDefault<InferUnionFromSchema<D, Schema>, Acc, D>,
+  ) => Promise<Acc>;
   readonly count: (
     variants: (keyof Schema & string) | ReadonlyArray<keyof Schema & string>,
   ) => (items: ReadonlyArray<InferUnionFromSchema<D, Schema>>) => number;

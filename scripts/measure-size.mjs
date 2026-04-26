@@ -16,7 +16,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import esbuild from 'esbuild';
 
-const CAP_BYTES = 2.5 * 1024; // ≤ 2.5 KB main-entry minified
+const CAP_BYTES = 4 * 1024; // ≤ 4 KB main-entry minified (≈ 1.4 KB gzipped)
 
 const rootDir = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),

@@ -5,7 +5,29 @@
 ### Changed
 
 - **Build target bumped to `es2022`** — `tsup.config.ts` now targets ES2022 (was ES2020), enabling native output for features like class static blocks and `at()`.
-- **`dismatch/remote-data` package verification tightened** — `verify-package.mjs` now asserts that the CJS and ESM builds export *exactly* `['RemoteData']` (strict `deepEqual`) rather than checking for the presence of individual named exports (`Failed`, `Idle`, `Loading`, `Ok`, `RefreshingType`, `RemoteData`). This enforces that internal variant constructors are not accidentally re-exported.
+
+## [2.5.0] - 2026-04-26
+
+### Added
+
+- **Async union APIs across the full surface** — added `matchAsync`, `matchWithDefaultAsync`, `matchAllAsync`, `mapAsync`, `foldAsync`, and `foldWithDefaultAsync` as standalone exports, plus bound handlers-first versions on `createPipeHandlers` and `createUnion`. `matchAllAsync` dispatches collection items in parallel via `Promise.all`; `foldAsync` and `foldWithDefaultAsync` remain sequential so the accumulator threads through `await`.
+- **`createUnion(schema)` default-discriminant overload** — `createUnion` can now be called with just a schema and will inject the default `'type'` discriminant automatically. The resulting factory still exposes the full bound toolkit (`is`, `match`, async helpers, `count`, `partition`, etc.) with `discriminant === 'type'`.
+- **`UnknownVariantError` named export** — exhaustive matchers and folds now surface a dedicated error class when a runtime value carries a variant that no handler covers. The error includes `.variant` and `.known` for diagnostics and recovery.
+- **Async/public handler-map types exported from the main entry** — `Matcher`, `MatcherWithDefault`, `Mapper`, and `MapperAll` are now re-exported from `dismatch`, alongside new async counterparts: `AsyncMatcher`, `AsyncMatcherWithDefault`, `AsyncMapper`, `AsyncFolder`, and `AsyncFolderWithDefault`.
+
+### Changed
+
+- `MatcherWithDefault.Default`, `Mapper`, and `MapperAll` payload signatures no longer force a synthetic `payload` parameter when `Payload` is omitted — their type-level call shapes now match the runtime curried APIs.
+- README fully restructured around reusable handlers, async matching, runtime errors, and bundle-size positioning; added dedicated sections for the async surface and `UnknownVariantError`.
+- **Package verification updated for the expanded public surface** — `verify-package.mjs` now expects the async exports and `UnknownVariantError` from the main entry while continuing to assert that `dismatch/remote-data` exports *exactly* `['RemoteData']`.
+
+### Fixed
+
+- **Unknown runtime variants now fail with actionable diagnostics** — sync and async exhaustive dispatch paths no longer throw the generic `'No handler'` error. They now throw `UnknownVariantError` with the actual variant name, the registered handler keys, and cleaned stack traces that point at the public caller instead of internal `dispatch`/`reduce` helpers.
+
+### Bundle size
+
+- Canonical metric (`esbuild --bundle --minify`, non-gzipped): **3,191 B (3.12 KB)** — still under the updated **4.0 KB** main-entry cap after adding the async dispatch surface and runtime error diagnostics.
 
 ## [2.4.0] - 2026-04-23
 

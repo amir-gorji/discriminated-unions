@@ -18,6 +18,13 @@ const Animal = createUnion('kind', {
 
 type Animal = InferUnion<typeof Animal>;
 
+const Result = createUnion({
+  ok: (data: string) => ({ data }),
+  error: (message: string) => ({ message }),
+});
+
+type Result = InferUnion<typeof Result>;
+
 describe('createUnion', () => {
   describe('constructors', () => {
     it('should inject the discriminant into constructed values', () => {
@@ -367,6 +374,36 @@ describe('createUnion', () => {
     });
   });
 
+  describe('default discriminant overload', () => {
+    it('should inject "type" when called with only a schema', () => {
+      expect(Result.ok('done')).toEqual({ type: 'ok', data: 'done' });
+      expect(Result.error('failed')).toEqual({ type: 'error', message: 'failed' });
+    });
+
+    it('should expose "type" as the default discriminant', () => {
+      expect(Result.discriminant).toBe('type');
+      expect(Result.variants).toEqual(['ok', 'error']);
+    });
+
+    it('should support is and isKnown with the default discriminant', () => {
+      const value: Result = Result.ok('done');
+      expect(Result.is('ok')(value)).toBe(true);
+      expect(Result.is('error')(value)).toBe(false);
+      expect(Result.isKnown({ type: 'ok', data: 'done' })).toBe(true);
+      expect(Result.isKnown({ kind: 'ok', data: 'done' })).toBe(false);
+    });
+
+    it('should support bound helpers with the default discriminant', () => {
+      const describe = Result.match({
+        ok: ({ data }) => data.trim(),
+        error: ({ message }) => message.toUpperCase(),
+      });
+
+      expect(describe(Result.ok(' done '))).toBe('done');
+      expect(describe(Result.error('failed'))).toBe('FAILED');
+    });
+  });
+
   describe('zero-arg constructor', () => {
     const Status = createUnion('type', {
       idle: () => ({}),
@@ -430,16 +467,68 @@ describe('createUnion', () => {
     });
   });
 
+  describe('bound async methods', () => {
+    it('Shape.matchAsync returns a Promise<R>', async () => {
+      const handle = Shape.matchAsync({
+        circle: async ({ radius }) => Math.PI * radius ** 2,
+        rectangle: async ({ width, height }) => width * height,
+        triangle: async ({ base, height }) => (base * height) / 2,
+      });
+      expect(await handle(Shape.circle(5))).toBeCloseTo(Math.PI * 25);
+    });
+
+    it('Shape.matchAllAsync runs in parallel and returns Promise<R[]>', async () => {
+      const areas = Shape.matchAllAsync({
+        circle: async ({ radius }) => Math.PI * radius ** 2,
+        rectangle: async ({ width, height }) => width * height,
+        triangle: async ({ base, height }) => (base * height) / 2,
+      });
+      const out = await areas([Shape.circle(1), Shape.rectangle(2, 3)]);
+      expect(out[0]).toBeCloseTo(Math.PI);
+      expect(out[1]).toBe(6);
+    });
+
+    it('Shape.foldAsync threads accumulator sequentially', async () => {
+      const items: Shape[] = [Shape.circle(1), Shape.circle(2), Shape.circle(3)];
+      const total = await Shape.foldAsync(items, 0)({
+        circle: async (acc, { radius }) => acc + radius,
+        rectangle: async (acc) => acc,
+        triangle: async (acc) => acc,
+      });
+      expect(total).toBe(6);
+    });
+
+    it('Shape.mapAsync transforms a single variant', async () => {
+      const out = await Shape.mapAsync({
+        circle: async ({ radius }) => ({ radius: radius * 10 }),
+      })(Shape.circle(5));
+      expect(out).toEqual({ type: 'circle', radius: 50 });
+    });
+
+    it('Shape.matchWithDefaultAsync routes to Default for unhandled variants', async () => {
+      const handle = Shape.matchWithDefaultAsync({
+        circle: async ({ radius }) => `c:${radius}`,
+        Default: async () => 'other',
+      });
+      expect(await handle(Shape.rectangle(2, 3))).toBe('other');
+    });
+  });
+
   describe('reserved variant names', () => {
     const reservedKeys = [
       'is',
       'isKnown',
       'match',
       'matchWithDefault',
+      'matchAsync',
+      'matchWithDefaultAsync',
+      'matchAllAsync',
       'map',
       'mapAll',
+      'mapAsync',
       'fold',
       'foldWithDefault',
+      'foldAsync',
       'count',
       'partition',
       'variants',

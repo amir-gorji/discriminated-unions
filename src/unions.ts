@@ -1,4 +1,9 @@
 import {
+  AsyncFolder,
+  AsyncFolderWithDefault,
+  AsyncMapper,
+  AsyncMatcher,
+  AsyncMatcherWithDefault,
   Folder,
   FolderWithDefault,
   InferUnionFromSchema,
@@ -26,8 +31,38 @@ declare global {
 
 const DEFAULT_DISCRIMINANT = 'type';
 
-function fail(message: string, caller: Function): never {
-  const err = new Error(message);
+/**
+ * Thrown when a discriminated union value carries a variant that no handler
+ * covers and no `Default` fallback is provided. Strict superset of what a
+ * native `switch` can detect: the variant name and the set of known handlers
+ * are attached for diagnostics and recovery.
+ *
+ * @example
+ * ```ts
+ * try {
+ *   match(badValue)({ a: () => 1, b: () => 2 });
+ * } catch (e) {
+ *   if (e instanceof UnknownVariantError) {
+ *     console.error(`Got "${e.variant}", expected one of: ${e.known.join(', ')}`);
+ *   }
+ * }
+ * ```
+ */
+export class UnknownVariantError extends Error {
+  constructor(
+    readonly variant: string,
+    readonly known: readonly string[],
+  ) {
+    super(
+      `dismatch: unknown variant "${variant}" (known: ${
+        known.length ? known.join(', ') : '∅'
+      })`,
+    );
+    this.name = 'UnknownVariantError';
+  }
+}
+
+function rethrow(err: Error, caller: Function): never {
   Error.captureStackTrace?.(err, caller);
   throw err;
 }
@@ -37,7 +72,7 @@ function ensureUnion(
   discriminant: PropertyKey,
   caller: Function,
 ): asserts input is SampleUnion<typeof discriminant> {
-  if (!isUnion(input, discriminant)) fail('Not a union', caller);
+  if (!isUnion(input, discriminant)) rethrow(new Error('Not a union'), caller);
 }
 
 function reduce<
@@ -59,7 +94,7 @@ function reduce<
     const handler = Object.hasOwn(handlers, key) ? handlers[key] : undefined;
     if (handler) acc = handler(acc, item);
     else if (fallback) acc = fallback(acc, item);
-    else fail('No handler', caller);
+    else rethrow(new UnknownVariantError(key, Object.keys(handlers)), caller);
   }
   return acc;
 }
@@ -76,14 +111,42 @@ function dispatch<
     ((input: any, payload: Payload) => Result) | undefined
   >,
   discriminant: Discriminant,
-  fallback?: (payload: Payload) => Result,
-  payload?: Payload,
+  fallback: ((payload: Payload) => Result) | undefined,
+  payload: Payload | undefined,
+  caller: Function,
 ): Result {
   const key = union[discriminant] as string;
   const fn = Object.hasOwn(handlers, key) ? handlers[key] : undefined;
   if (fn) return fn(union, payload!);
   if (fallback) return fallback(payload!);
-  return fail('No handler', dispatch);
+  return rethrow(new UnknownVariantError(key, Object.keys(handlers)), caller);
+}
+
+async function reduceAsync<
+  T extends SampleUnion<Discriminant>,
+  Acc,
+  Discriminant extends PropertyKey,
+>(
+  items: readonly T[],
+  initial: Acc,
+  handlers: Record<
+    string,
+    ((acc: Acc, input: any) => Acc | Promise<Acc>) | undefined
+  >,
+  discriminant: Discriminant,
+  fallback: ((acc: Acc, item: T) => Acc | Promise<Acc>) | undefined,
+  caller: Function,
+): Promise<Acc> {
+  let acc = initial;
+  for (const item of items) {
+    ensureUnion(item, discriminant, caller);
+    const key = item[discriminant] as string;
+    const handler = Object.hasOwn(handlers, key) ? handlers[key] : undefined;
+    if (handler) acc = await handler(acc, item);
+    else if (fallback) acc = await fallback(acc, item);
+    else rethrow(new UnknownVariantError(key, Object.keys(handlers)), caller);
+  }
+  return acc;
 }
 
 // ── Public API ─────────────────────────────────────────────────────────────
@@ -208,6 +271,7 @@ export function map<
       discriminant,
       () => input,
       payload,
+      map,
     );
     return result === input
       ? result
@@ -248,6 +312,7 @@ export function mapAll<
       discriminant,
       undefined,
       payload,
+      mapAll,
     ),
     [discriminant]: input[discriminant],
   });
@@ -290,6 +355,7 @@ export function match<
       discriminant,
       undefined,
       payload,
+      match,
     );
 }
 
@@ -331,6 +397,7 @@ export function matchWithDefault<
       discriminant,
       (matcher as any).Default,
       payload,
+      matchWithDefault,
     );
 }
 
@@ -480,6 +547,209 @@ export function partition<
 }
 
 /**
+ * Async exhaustive pattern matching. Like {@link match}, but handlers may return
+ * `Promise<R>` or `R`. The result is unified to `Promise<R>` — never
+ * `Promise<A> | Promise<B>`.
+ *
+ * @example
+ * ```ts
+ * const profile = await matchAsync(user)({
+ *   admin: async ({ id }) => fetchAdminProfile(id),
+ *   guest: async ({ id }) => fetchGuestProfile(id),
+ * }); // typed: AdminProfile | GuestProfile
+ * ```
+ */
+export function matchAsync<
+  T extends SampleUnion<Discriminant>,
+  Discriminant extends PropertyKey = 'type',
+  Payload extends any = never,
+>(
+  input: T,
+  discriminant: Discriminant = DEFAULT_DISCRIMINANT as Discriminant,
+  payload?: Payload,
+): <Result>(
+  matcher: AsyncMatcher<T, Result, Discriminant, Payload>,
+) => Promise<Result> {
+  ensureUnion(input, discriminant, matchAsync);
+  return async <Result>(
+    matcher: AsyncMatcher<T, Result, Discriminant, Payload>,
+  ) =>
+    dispatch<T, Result | Promise<Result>, Discriminant, Payload>(
+      input,
+      matcher as unknown as Record<
+        string,
+        (input: any, payload: Payload) => Result | Promise<Result>
+      >,
+      discriminant,
+      undefined,
+      payload,
+      matchAsync,
+    );
+}
+
+/**
+ * Async pattern matching with `Default` fallback. Like {@link matchWithDefault},
+ * but handlers may return `Promise<R>` or `R`. Result unified to `Promise<R>`.
+ */
+export function matchWithDefaultAsync<
+  T extends SampleUnion<Discriminant>,
+  Discriminant extends PropertyKey = 'type',
+  Payload extends any = never,
+>(
+  input: T,
+  discriminant: Discriminant = DEFAULT_DISCRIMINANT as Discriminant,
+  payload?: Payload,
+): <U>(
+  matcher: AsyncMatcherWithDefault<T, U, Discriminant, Payload>,
+) => Promise<U> {
+  ensureUnion(input, discriminant, matchWithDefaultAsync);
+  return async <U>(
+    matcher: AsyncMatcherWithDefault<T, U, Discriminant, Payload>,
+  ) =>
+    dispatch<T, U | Promise<U>, Discriminant, Payload>(
+      input,
+      matcher as unknown as Record<
+        string,
+        (input: any, payload: Payload) => U | Promise<U>
+      >,
+      discriminant,
+      (matcher as any).Default,
+      payload,
+      matchWithDefaultAsync,
+    );
+}
+
+/**
+ * Parallel per-item async matching across a collection. Each item is dispatched
+ * to its variant handler concurrently via `Promise.all`. Returns `Promise<R[]>`.
+ *
+ * Use this as the parallel sibling to {@link foldAsync} when handlers are
+ * independent (no shared accumulator).
+ *
+ * @example
+ * ```ts
+ * const names = await matchAllAsync(users)({
+ *   admin: async ({ id }) => `admin:${await fetchName(id)}`,
+ *   guest: async ({ id }) => `guest:${await fetchName(id)}`,
+ * });
+ * ```
+ */
+export function matchAllAsync<
+  T extends SampleUnion<Discriminant>,
+  Discriminant extends PropertyKey = 'type',
+  Payload extends any = never,
+>(
+  items: readonly T[],
+  discriminant: Discriminant = DEFAULT_DISCRIMINANT as Discriminant,
+  payload?: Payload,
+): <Result>(
+  matcher: AsyncMatcher<T, Result, Discriminant, Payload>,
+) => Promise<Result[]> {
+  return <Result>(matcher: AsyncMatcher<T, Result, Discriminant, Payload>) =>
+    Promise.all(
+      items.map(async (item) => {
+        ensureUnion(item, discriminant, matchAllAsync);
+        return dispatch<T, Result | Promise<Result>, Discriminant, Payload>(
+          item,
+          matcher as unknown as Record<
+            string,
+            (input: any, payload: Payload) => Result | Promise<Result>
+          >,
+          discriminant,
+          undefined,
+          payload,
+          matchAllAsync,
+        );
+      }),
+    );
+}
+
+/**
+ * Async partial transform. Like {@link map}, but handlers may return a Promise.
+ * Variants without a handler pass through unchanged. Result is `Promise<T>`.
+ */
+export function mapAsync<
+  T extends SampleUnion<Discriminant>,
+  Discriminant extends PropertyKey = 'type',
+  Payload extends any = never,
+>(
+  input: T,
+  discriminant: Discriminant = DEFAULT_DISCRIMINANT as Discriminant,
+  payload?: Payload,
+): (mapper: AsyncMapper<T, Discriminant, Payload>) => Promise<T> {
+  ensureUnion(input, discriminant, mapAsync);
+  return async (mapper) => {
+    const result = await dispatch<T, T | Promise<T>, Discriminant, Payload>(
+      input,
+      mapper as unknown as Record<
+        string,
+        (input: any, payload: Payload) => T | Promise<T>
+      >,
+      discriminant,
+      () => input,
+      payload,
+      mapAsync,
+    );
+    return result === input
+      ? result
+      : { ...result, [discriminant]: input[discriminant] };
+  };
+}
+
+/**
+ * Async sequential fold. Like {@link fold}, but each handler may return
+ * `Acc` or `Promise<Acc>`. The accumulator threads through `await`, so handlers
+ * run strictly in array order. For parallel per-item dispatch, use
+ * {@link matchAllAsync}.
+ */
+export function foldAsync<
+  T extends SampleUnion<Discriminant>,
+  Acc,
+  Discriminant extends PropertyKey = 'type',
+>(
+  items: readonly T[],
+  initial: Acc,
+  discriminant: Discriminant = DEFAULT_DISCRIMINANT as Discriminant,
+): (handlers: AsyncFolder<T, Acc, Discriminant>) => Promise<Acc> {
+  return (handlers) =>
+    reduceAsync(
+      items,
+      initial,
+      handlers as any,
+      discriminant,
+      undefined,
+      foldAsync,
+    );
+}
+
+/**
+ * Async partial fold with `Default` fallback. Like {@link foldWithDefault},
+ * but each handler (including `Default`) may return `Acc` or `Promise<Acc>`.
+ * Sequential execution — accumulator threads through `await`, so handlers
+ * run strictly in array order. For parallel per-item dispatch, use
+ * {@link matchAllAsync}.
+ */
+export function foldWithDefaultAsync<
+  T extends SampleUnion<Discriminant>,
+  Acc,
+  Discriminant extends PropertyKey = 'type',
+>(
+  items: readonly T[],
+  initial: Acc,
+  discriminant: Discriminant = DEFAULT_DISCRIMINANT as Discriminant,
+): (handlers: AsyncFolderWithDefault<T, Acc, Discriminant>) => Promise<Acc> {
+  return (handlers) =>
+    reduceAsync(
+      items,
+      initial,
+      handlers as any,
+      discriminant,
+      handlers.Default,
+      foldWithDefaultAsync,
+    );
+}
+
+/**
  * Creates a pipe-friendly handler factory bound to a specific discriminant key.
  * Returns an object whose methods follow the reversed-curry shape `(handlers) => (input) => result`,
  * making them composable inside FP `pipe` utilities without wrapper lambdas.
@@ -512,56 +782,95 @@ export function createPipeHandlers<
   T extends SampleUnion<Discriminant>,
   Discriminant extends TakeDiscriminant<T> = TakeDiscriminant<T>,
 >(discriminant: Discriminant) {
+  // Wraps standalone(input, discriminant, payload?)(handlers) into pipe-curry shape.
+  const wI = (fn: any) => (handlers: any) => (input: any, payload?: any) =>
+    fn(input, discriminant, payload)(handlers);
+
+  // Wraps standalone(items, initial, discriminant)(handlers) into pipe-curry shape.
+  const wF = (fn: any) => (items: any, initial: any) => (handlers: any) =>
+    fn(items, initial, discriminant)(handlers);
+
   return {
-    match:
-      <U, Payload extends any = never>(
-        handlers: Matcher<T, U, Discriminant, Payload>,
-      ) =>
-      (
-        input: T,
-        ...args: [Payload] extends [never] ? [] : [payload: Payload]
-      ): U =>
-        match(input, discriminant, args[0] as Payload)(handlers),
+    match: wI(match) as <U, Payload extends any = never>(
+      handlers: Matcher<T, U, Discriminant, Payload>,
+    ) => (
+      input: T,
+      ...args: [Payload] extends [never] ? [] : [payload: Payload]
+    ) => U,
 
-    matchWithDefault:
-      <U, Payload extends any = never>(
-        handlers: MatcherWithDefault<T, U, Discriminant, Payload>,
-      ) =>
-      (
-        input: T,
-        ...args: [Payload] extends [never] ? [] : [payload: Payload]
-      ): U =>
-        matchWithDefault(input, discriminant, args[0] as Payload)(handlers),
+    matchWithDefault: wI(matchWithDefault) as <U, Payload extends any = never>(
+      handlers: MatcherWithDefault<T, U, Discriminant, Payload>,
+    ) => (
+      input: T,
+      ...args: [Payload] extends [never] ? [] : [payload: Payload]
+    ) => U,
 
-    map:
-      <Payload extends any = never>(
-        handlers: Mapper<T, Discriminant, Payload>,
-      ) =>
-      (
-        input: T,
-        ...args: [Payload] extends [never] ? [] : [payload: Payload]
-      ): T =>
-        map(input, discriminant, args[0] as Payload)(handlers),
+    map: wI(map) as <Payload extends any = never>(
+      handlers: Mapper<T, Discriminant, Payload>,
+    ) => (
+      input: T,
+      ...args: [Payload] extends [never] ? [] : [payload: Payload]
+    ) => T,
 
-    mapAll:
-      <Payload extends any = never>(
-        handlers: MapperAll<T, Discriminant, Payload>,
-      ) =>
-      (
-        input: T,
-        ...args: [Payload] extends [never] ? [] : [payload: Payload]
-      ): T =>
-        mapAll(input, discriminant, args[0] as Payload)(handlers),
+    mapAll: wI(mapAll) as <Payload extends any = never>(
+      handlers: MapperAll<T, Discriminant, Payload>,
+    ) => (
+      input: T,
+      ...args: [Payload] extends [never] ? [] : [payload: Payload]
+    ) => T,
 
-    fold:
-      <Acc>(items: readonly T[], initial: Acc) =>
-      (handlers: Folder<T, Acc, Discriminant>): Acc =>
-        fold(items, initial, discriminant)(handlers),
+    matchAsync: wI(matchAsync) as <U, Payload extends any = never>(
+      handlers: AsyncMatcher<T, U, Discriminant, Payload>,
+    ) => (
+      input: T,
+      ...args: [Payload] extends [never] ? [] : [payload: Payload]
+    ) => Promise<U>,
 
-    foldWithDefault:
-      <Acc>(items: readonly T[], initial: Acc) =>
-      (handlers: FolderWithDefault<T, Acc, Discriminant>): Acc =>
-        foldWithDefault(items, initial, discriminant)(handlers),
+    matchWithDefaultAsync: wI(matchWithDefaultAsync) as <
+      U,
+      Payload extends any = never,
+    >(
+      handlers: AsyncMatcherWithDefault<T, U, Discriminant, Payload>,
+    ) => (
+      input: T,
+      ...args: [Payload] extends [never] ? [] : [payload: Payload]
+    ) => Promise<U>,
+
+    matchAllAsync: wI(matchAllAsync) as <U, Payload extends any = never>(
+      handlers: AsyncMatcher<T, U, Discriminant, Payload>,
+    ) => (
+      items: readonly T[],
+      ...args: [Payload] extends [never] ? [] : [payload: Payload]
+    ) => Promise<U[]>,
+
+    mapAsync: wI(mapAsync) as <Payload extends any = never>(
+      handlers: AsyncMapper<T, Discriminant, Payload>,
+    ) => (
+      input: T,
+      ...args: [Payload] extends [never] ? [] : [payload: Payload]
+    ) => Promise<T>,
+
+    fold: wF(fold) as <Acc>(
+      items: readonly T[],
+      initial: Acc,
+    ) => (handlers: Folder<T, Acc, Discriminant>) => Acc,
+
+    foldWithDefault: wF(foldWithDefault) as <Acc>(
+      items: readonly T[],
+      initial: Acc,
+    ) => (handlers: FolderWithDefault<T, Acc, Discriminant>) => Acc,
+
+    foldAsync: wF(foldAsync) as <Acc>(
+      items: readonly T[],
+      initial: Acc,
+    ) => (handlers: AsyncFolder<T, Acc, Discriminant>) => Promise<Acc>,
+
+    foldWithDefaultAsync: wF(foldWithDefaultAsync) as <Acc>(
+      items: readonly T[],
+      initial: Acc,
+    ) => (
+      handlers: AsyncFolderWithDefault<T, Acc, Discriminant>,
+    ) => Promise<Acc>,
 
     count:
       (variants: T[Discriminant] | readonly T[Discriminant][]) =>
@@ -618,33 +927,36 @@ export function createPipeHandlers<
  * });
  * ```
  */
-const RESERVED_UNION_KEYS = new Set<string>([
-  'is',
-  'isKnown',
-  'match',
-  'matchWithDefault',
-  'map',
-  'mapAll',
-  'fold',
-  'foldWithDefault',
-  'count',
-  'partition',
-  'variants',
-  'discriminant',
-  '_union',
-]);
+const RESERVED_UNION_KEYS = new Set<string>(
+  'is isKnown match matchWithDefault matchAsync matchWithDefaultAsync matchAllAsync map mapAll mapAsync fold foldWithDefault foldAsync foldWithDefaultAsync count partition variants discriminant _union'.split(
+    ' ',
+  ),
+);
 
-export function createUnion<D extends string, Schema extends UnionSchema<D>>(
-  discriminant: D,
-  schema: string extends keyof Schema
+type ValidUnionSchema<D extends string, Schema extends UnionSchema<D>> =
+  string extends keyof Schema
     ? Schema
     : [keyof Schema & string & ReservedUnionKeys] extends [never]
       ? Schema
-      : never,
-): UnionFactory<D, Schema> {
-  type Union = InferUnionFromSchema<D, Schema>;
+      : never;
 
-  const keys = Object.keys(schema) as (keyof Schema & string)[];
+export function createUnion<Schema extends UnionSchema<typeof DEFAULT_DISCRIMINANT>>(
+  schema: ValidUnionSchema<typeof DEFAULT_DISCRIMINANT, Schema>,
+): UnionFactory<typeof DEFAULT_DISCRIMINANT, Schema>;
+export function createUnion<D extends string, Schema extends UnionSchema<D>>(
+  discriminant: D,
+  schema: ValidUnionSchema<D, Schema>,
+): UnionFactory<D, Schema>;
+export function createUnion(
+  discriminantOrSchema: string | UnionSchema<typeof DEFAULT_DISCRIMINANT>,
+  maybeSchema?: UnionSchema<string>,
+): any {
+  const discriminant = (
+    maybeSchema ? discriminantOrSchema : DEFAULT_DISCRIMINANT
+  ) as string;
+  const schema = (maybeSchema ?? discriminantOrSchema) as UnionSchema<string>;
+
+  const keys = Object.keys(schema);
 
   for (const key of keys) {
     if (RESERVED_UNION_KEYS.has(key))
@@ -661,10 +973,10 @@ export function createUnion<D extends string, Schema extends UnionSchema<D>>(
   }
 
   return Object.assign(constructors, {
-    ...createPipeHandlers<Union, any>(discriminant as any),
+    ...(createPipeHandlers as any)(discriminant),
     isKnown: (x: unknown): boolean =>
       isUnion(x, discriminant) && (x as any)[discriminant] in schema,
-    variants: [...keys] as ReadonlyArray<keyof Schema & string>,
+    variants: keys,
     discriminant,
   });
 }

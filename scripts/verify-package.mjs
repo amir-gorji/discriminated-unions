@@ -14,17 +14,24 @@ const pkg = JSON.parse(
 );
 
 const expectedExports = [
+  'UnknownVariantError',
   'count',
   'createPipeHandlers',
   'createUnion',
   'fold',
+  'foldAsync',
   'foldWithDefault',
+  'foldWithDefaultAsync',
   'is',
   'isUnion',
   'map',
   'mapAll',
+  'mapAsync',
   'match',
+  'matchAllAsync',
+  'matchAsync',
   'matchWithDefault',
+  'matchWithDefaultAsync',
   'partition',
 ].sort();
 
@@ -99,8 +106,13 @@ assert.deepEqual(
 
 const expectedRemoteDataExports = ['RemoteData'];
 
-const rdCjs = require(path.join(rootDir, pkg.exports['./remote-data'].require.default));
-const rdEsm = await import(pathToFileURL(path.join(rootDir, pkg.exports['./remote-data'].import.default)).href);
+const rdCjs = require(
+  path.join(rootDir, pkg.exports['./remote-data'].require.default),
+);
+const rdEsm = await import(
+  pathToFileURL(path.join(rootDir, pkg.exports['./remote-data'].import.default))
+    .href
+);
 
 const rdCjsRuntime = Object.keys(rdCjs).sort();
 const rdEsmRuntime = Object.keys(rdEsm).sort();
@@ -115,6 +127,10 @@ assert.deepEqual(
   expectedRemoteDataExports,
   'remote-data ESM exports do not match the documented public API',
 );
-assert.deepEqual(rdCjsRuntime, rdEsmRuntime, 'remote-data CJS and ESM exports are out of sync');
+assert.deepEqual(
+  rdCjsRuntime,
+  rdEsmRuntime,
+  'remote-data CJS and ESM exports are out of sync',
+);
 
 console.log('Packed package surface verified.');

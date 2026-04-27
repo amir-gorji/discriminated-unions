@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { matchWithDefaultAsync } from '../unions';
+import { matchWithDefaultAsync } from '../async';
 
 type Result =
   | { type: 'ok'; value: number }

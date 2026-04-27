@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { mapAsync } from '../unions';
+import { mapAsync } from '../async';
 
 type Shape =
   | { type: 'circle'; radius: number }

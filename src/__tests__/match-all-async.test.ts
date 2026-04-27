@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { matchAllAsync } from '../unions';
+import { matchAllAsync } from '../async';
 
 type User =
   | { type: 'admin'; id: string }

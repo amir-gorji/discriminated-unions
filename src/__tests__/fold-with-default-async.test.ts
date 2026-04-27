@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { foldWithDefaultAsync } from '../unions';
+import { foldWithDefaultAsync } from '../async';
 
 type Event =
   | { type: 'click'; x: number }

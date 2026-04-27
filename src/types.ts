@@ -322,16 +322,10 @@ export type ReservedUnionKeys =
   | 'isKnown'
   | 'match'
   | 'matchWithDefault'
-  | 'matchAsync'
-  | 'matchWithDefaultAsync'
-  | 'matchAllAsync'
   | 'map'
   | 'mapAll'
-  | 'mapAsync'
   | 'fold'
   | 'foldWithDefault'
-  | 'foldAsync'
-  | 'foldWithDefaultAsync'
   | 'count'
   | 'partition'
   | 'variants'
@@ -438,42 +432,6 @@ export type UnionFactory<D extends string, Schema extends UnionSchema<D>> = {
       ? [input: InferUnionFromSchema<D, Schema>]
       : [input: InferUnionFromSchema<D, Schema>, payload: Payload]
   ) => InferUnionFromSchema<D, Schema>;
-  readonly matchAsync: <U, Payload extends any = never>(
-    handlers: AsyncMatcher<InferUnionFromSchema<D, Schema>, U, D, Payload>,
-  ) => (
-    ...inputs: [Payload] extends [never]
-      ? [input: InferUnionFromSchema<D, Schema>]
-      : [input: InferUnionFromSchema<D, Schema>, payload: Payload]
-  ) => Promise<U>;
-  readonly matchWithDefaultAsync: <U, Payload extends any = never>(
-    handlers: AsyncMatcherWithDefault<
-      InferUnionFromSchema<D, Schema>,
-      U,
-      D,
-      Payload
-    >,
-  ) => (
-    ...inputs: [Payload] extends [never]
-      ? [input: InferUnionFromSchema<D, Schema>]
-      : [input: InferUnionFromSchema<D, Schema>, payload: Payload]
-  ) => Promise<U>;
-  readonly matchAllAsync: <U, Payload extends any = never>(
-    handlers: AsyncMatcher<InferUnionFromSchema<D, Schema>, U, D, Payload>,
-  ) => (
-    ...inputs: [Payload] extends [never]
-      ? [items: ReadonlyArray<InferUnionFromSchema<D, Schema>>]
-      : [
-          items: ReadonlyArray<InferUnionFromSchema<D, Schema>>,
-          payload: Payload,
-        ]
-  ) => Promise<U[]>;
-  readonly mapAsync: <Payload extends any = never>(
-    handlers: AsyncMapper<InferUnionFromSchema<D, Schema>, D, Payload>,
-  ) => (
-    ...inputs: [Payload] extends [never]
-      ? [input: InferUnionFromSchema<D, Schema>]
-      : [input: InferUnionFromSchema<D, Schema>, payload: Payload]
-  ) => Promise<InferUnionFromSchema<D, Schema>>;
   readonly fold: <Acc>(
     items: ReadonlyArray<InferUnionFromSchema<D, Schema>>,
     initial: Acc,
@@ -482,18 +440,6 @@ export type UnionFactory<D extends string, Schema extends UnionSchema<D>> = {
     items: ReadonlyArray<InferUnionFromSchema<D, Schema>>,
     initial: Acc,
   ) => (handlers: FolderWithDefault<InferUnionFromSchema<D, Schema>, Acc, D>) => Acc;
-  readonly foldAsync: <Acc>(
-    items: ReadonlyArray<InferUnionFromSchema<D, Schema>>,
-    initial: Acc,
-  ) => (
-    handlers: AsyncFolder<InferUnionFromSchema<D, Schema>, Acc, D>,
-  ) => Promise<Acc>;
-  readonly foldWithDefaultAsync: <Acc>(
-    items: ReadonlyArray<InferUnionFromSchema<D, Schema>>,
-    initial: Acc,
-  ) => (
-    handlers: AsyncFolderWithDefault<InferUnionFromSchema<D, Schema>, Acc, D>,
-  ) => Promise<Acc>;
   readonly count: (
     variants: (keyof Schema & string) | ReadonlyArray<keyof Schema & string>,
   ) => (items: ReadonlyArray<InferUnionFromSchema<D, Schema>>) => number;

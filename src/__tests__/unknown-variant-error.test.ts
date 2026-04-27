@@ -2,9 +2,9 @@ import { describe, it, expect } from 'vitest';
 import {
   UnknownVariantError,
   match,
-  matchAsync,
   fold,
 } from '../unions';
+import { matchAsync } from '../async';
 
 describe('UnknownVariantError', () => {
   it('is an Error subclass', () => {

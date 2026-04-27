@@ -19,20 +19,23 @@ const expectedExports = [
   'createPipeHandlers',
   'createUnion',
   'fold',
-  'foldAsync',
   'foldWithDefault',
-  'foldWithDefaultAsync',
   'is',
   'isUnion',
   'map',
   'mapAll',
-  'mapAsync',
   'match',
+  'matchWithDefault',
+  'partition',
+].sort();
+
+const expectedAsyncExports = [
+  'foldAsync',
+  'foldWithDefaultAsync',
+  'mapAsync',
   'matchAllAsync',
   'matchAsync',
-  'matchWithDefault',
   'matchWithDefaultAsync',
-  'partition',
 ].sort();
 
 const requiredFiles = [
@@ -41,6 +44,8 @@ const requiredFiles = [
   pkg.types,
   pkg.exports['.'].import.types,
   pkg.exports['.'].require.types,
+  pkg.exports['./async'].import.types,
+  pkg.exports['./async'].require.types,
   pkg.exports['./remote-data'].import.types,
   pkg.exports['./remote-data'].require.types,
 ];
@@ -76,6 +81,10 @@ for (const file of [
   'lib/index.mjs',
   'lib/index.d.ts',
   'lib/index.d.mts',
+  'lib/async.js',
+  'lib/async.mjs',
+  'lib/async.d.ts',
+  'lib/async.d.mts',
   'lib/remote-data.js',
   'lib/remote-data.mjs',
   'lib/remote-data.d.ts',
@@ -102,6 +111,32 @@ assert.deepEqual(
   Object.keys(cjs).sort(),
   Object.keys(esm).sort(),
   'CJS and ESM exports are out of sync',
+);
+
+const asyncCjs = require(
+  path.join(rootDir, pkg.exports['./async'].require.default),
+);
+const asyncEsm = await import(
+  pathToFileURL(path.join(rootDir, pkg.exports['./async'].import.default)).href
+);
+
+const asyncCjsRuntime = Object.keys(asyncCjs).sort();
+const asyncEsmRuntime = Object.keys(asyncEsm).sort();
+
+assert.deepEqual(
+  asyncCjsRuntime,
+  expectedAsyncExports,
+  'async CJS exports do not match the documented public API',
+);
+assert.deepEqual(
+  asyncEsmRuntime,
+  expectedAsyncExports,
+  'async ESM exports do not match the documented public API',
+);
+assert.deepEqual(
+  asyncCjsRuntime,
+  asyncEsmRuntime,
+  'async CJS and ESM exports are out of sync',
 );
 
 const expectedRemoteDataExports = ['RemoteData'];

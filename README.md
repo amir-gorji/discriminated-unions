@@ -83,12 +83,12 @@ No wrapper lambdas, no `.exhaustive()`, no `{ type: '…' }` noise. Exhaustivene
 
 ## Async matching
 
-Async handlers in TypeScript normally infer to `Promise<A> | Promise<B>` instead of `Promise<A | B>` — forcing manual `await` + cast. `matchAsync` (and friends) unify the result.
+Async handlers in TypeScript normally infer to `Promise<A> | Promise<B>` instead of `Promise<A | B>` — forcing manual `await` + cast. `matchAsync` (and friends) unify the result. Async lives in the dedicated **`dismatch/async`** subpath — the main entry stays lean for sync-only consumers; pull async in only where you need it.
 
 ```ts
-import { matchAsync, matchAllAsync, foldAsync } from 'dismatch';
+import { matchAsync, matchAllAsync, foldAsync } from 'dismatch/async';
 
-// Single value — returns Promise<AdminProfile | GuestProfile>
+// Single value — returns Promise<AdminProfile | GuestProfile | { reason: string }>
 const profile = await matchAsync(user)({
   admin: async ({ id }) => fetchAdminProfile(id),
   guest: async ({ id }) => fetchGuestProfile(id),
@@ -112,7 +112,7 @@ const total = await foldAsync(
 });
 ```
 
-Mixing sync and async handlers is fine — the result still unifies to `Promise<R>`. See [Standalone Functions](#standalone-functions) for the full async surface (`matchAsync`, `matchWithDefaultAsync`, `matchAllAsync`, `mapAsync`, `foldAsync`).
+Mixing sync and async handlers is fine — the result still unifies to `Promise<R>`. See [Async Functions](#async-functions) for the full surface (`matchAsync`, `matchWithDefaultAsync`, `matchAllAsync`, `mapAsync`, `foldAsync`, `foldWithDefaultAsync`).
 
 ---
 
@@ -132,6 +132,7 @@ npm install dismatch
 - [Comparison](#comparison)
 - [Quick Start](#quick-start)
 - [Standalone Functions](#standalone-functions)
+- [Async Functions (`dismatch/async`)](#async-functions)
 - [Pipe Composition](#pipe-composition)
 - [Type Helpers](#type-helpers)
 - [Custom Discriminant](#custom-discriminant)
@@ -285,15 +286,6 @@ const banner = Result.matchWithDefault({
   Default: () => 'All good',
 });
 
-// Async — handlers may return Promise<R>; result unifies to Promise<R>
-const fetchLabel = Result.matchAsync({
-  ok: async ({ data }) => `Data: ${data}`,
-  error: async ({ message }) => `Error: ${message}`,
-  loading: async () => 'Loading...',
-});
-
-await fetchLabel(r); // Promise<string>
-
 // Transform — modify specific variants, rest pass through unchanged
 const cleared = Result.map({
   error: ({ message }) => ({ message: '' }),
@@ -314,6 +306,8 @@ const stats = Result.fold(results, { oks: 0, errors: 0, loadings: 0 })({
 });
 ```
 
+> Need async? Import from [`dismatch/async`](#async-functions) — `matchAsync`, `matchAllAsync`, `foldAsync`, etc. work on any union (factory, ad-hoc, or third-party).
+
 ### 5. Metadata
 
 ```ts
@@ -325,7 +319,7 @@ Result.discriminant; // 'type'
 
 ## Standalone Functions
 
-You can use dismatch functions directly on any discriminated union — no factory required.
+You can use dismatch functions directly on any discriminated union — no factory required. For async equivalents, see [Async Functions](#async-functions).
 
 ### `match`
 
@@ -357,47 +351,6 @@ const banner = matchWithDefault(result)({
 });
 ```
 
-### `matchAsync`
-
-Exhaustive async pattern matching. Handlers may return either `R` or `Promise<R>`. The result is unified to `Promise<R>` — never `Promise<A> | Promise<B>`.
-
-```ts
-import { matchAsync } from 'dismatch';
-
-const profile = await matchAsync(user)({
-  admin: async ({ id }) => fetchAdminProfile(id),
-  guest: async ({ id }) => fetchGuestProfile(id),
-  banned: ({ reason }) => ({ kind: 'banned', reason }), // sync handler is fine too
-});
-```
-
-### `matchWithDefaultAsync`
-
-Partial async matching with an async-or-sync `Default` fallback.
-
-```ts
-import { matchWithDefaultAsync } from 'dismatch';
-
-const status = await matchWithDefaultAsync(result)({
-  ok: async ({ data }) => `Loaded ${data.length} items`,
-  Default: () => 'Idle',
-});
-```
-
-### `matchAllAsync`
-
-Parallel per-item async dispatch over a collection. Each item runs through its variant handler concurrently via `Promise.all`. Order is preserved. Use this when handlers are independent (no shared accumulator).
-
-```ts
-import { matchAllAsync } from 'dismatch';
-
-const profiles = await matchAllAsync(users)({
-  admin: async ({ id }) => fetchAdminProfile(id),
-  guest: async ({ id }) => fetchGuestProfile(id),
-});
-//    ^? (AdminProfile | GuestProfile)[]
-```
-
 ### `map` / `mapAll`
 
 `map` transforms specific variants — unmatched ones pass through (same reference). `mapAll` requires every variant. The discriminant is re-injected automatically — handlers return only the data fields.
@@ -417,18 +370,6 @@ const normalized = mapAll(shape)({
     width: Math.abs(width),
     height: Math.abs(height),
   }),
-});
-```
-
-### `mapAsync`
-
-Async partial transform. Like `map`, but handlers may return a Promise. Unmatched variants pass through unchanged. Result is `Promise<T>`.
-
-```ts
-import { mapAsync } from 'dismatch';
-
-const enriched = await mapAsync(shape)({
-  circle: async ({ radius }) => ({ radius: await fetchScaled(radius) }),
 });
 ```
 
@@ -553,22 +494,6 @@ const log = foldWithDefault(
 });
 ```
 
-### `foldAsync`
-
-Sequential async fold. Each handler may return `Acc` or `Promise<Acc>`. The accumulator threads through `await`, so handlers run strictly in array order. For parallel per-item dispatch (independent handlers), use [`matchAllAsync`](#matchallasync).
-
-```ts
-import { foldAsync } from 'dismatch';
-
-const total = await foldAsync(
-  events,
-  0,
-)({
-  click: async (acc, { x }) => acc + (await scoreClick(x)),
-  key: (acc) => acc + 1,
-});
-```
-
 ### `is`
 
 Value-first type guard for discriminated unions. Covers single-variant and multi-variant narrowing inside `if` blocks.
@@ -673,9 +598,99 @@ try {
 
 ---
 
+## Async Functions
+
+Imported from the dedicated **`dismatch/async`** subpath — keeps the main entry lean for sync-only consumers; pull async in only where you need it. Standalone-only by design (no factory or pipe-handlers binding) — so async lives at `await matchAsync(value)(handlers)`, never on `Result.matchAsync(...)` or `pipeHandlers.matchAsync(...)`.
+
+Async handlers may freely mix with sync ones — the result still unifies to `Promise<R>`, never `Promise<A> | Promise<B>`.
+
+### `matchAsync`
+
+Exhaustive async pattern matching. Throws `UnknownVariantError` if a runtime variant has no handler.
+
+```ts
+import { matchAsync } from 'dismatch/async';
+
+const profile = await matchAsync(user)({
+  admin: async ({ id }) => fetchAdminProfile(id),
+  guest: async ({ id }) => fetchGuestProfile(id),
+  banned: ({ reason }) => ({ kind: 'banned', reason }), // sync handler is fine
+});
+```
+
+### `matchWithDefaultAsync`
+
+Partial async matching with an async-or-sync `Default` fallback.
+
+```ts
+import { matchWithDefaultAsync } from 'dismatch/async';
+
+const status = await matchWithDefaultAsync(result)({
+  ok: async ({ data }) => `Loaded ${data.length} items`,
+  Default: () => 'Idle',
+});
+```
+
+### `matchAllAsync`
+
+Parallel per-item async dispatch over a collection. Each item runs through its variant handler concurrently via `Promise.all`. Order is preserved. Use when handlers are independent (no shared accumulator).
+
+```ts
+import { matchAllAsync } from 'dismatch/async';
+
+const profiles = await matchAllAsync(users)({
+  admin: async ({ id }) => fetchAdminProfile(id),
+  guest: async ({ id }) => fetchGuestProfile(id),
+});
+//    ^? (AdminProfile | GuestProfile)[]
+```
+
+### `mapAsync`
+
+Async partial transform. Like `map`, but handlers may return a Promise. Unmatched variants pass through unchanged. Result is `Promise<T>`.
+
+```ts
+import { mapAsync } from 'dismatch/async';
+
+const enriched = await mapAsync(shape)({
+  circle: async ({ radius }) => ({ radius: await fetchScaled(radius) }),
+});
+```
+
+### `foldAsync`
+
+Sequential async fold. Each handler may return `Acc` or `Promise<Acc>`. The accumulator threads through `await`, so handlers run strictly in array order. For parallel per-item dispatch (independent handlers), use [`matchAllAsync`](#matchallasync).
+
+```ts
+import { foldAsync } from 'dismatch/async';
+
+const total = await foldAsync(
+  events,
+  0,
+)({
+  click: async (acc, { x }) => acc + (await scoreClick(x)),
+  key: (acc) => acc + 1,
+});
+```
+
+### `foldWithDefaultAsync`
+
+Partial async fold with an async-or-sync `Default` fallback. Sequential — accumulator threads through `await`.
+
+```ts
+import { foldWithDefaultAsync } from 'dismatch/async';
+
+const summary = await foldWithDefaultAsync(events, '')({
+  click: async (acc, { x }) => `${acc} click@${await label(x)}`,
+  Default: (acc) => acc,
+});
+```
+
+---
+
 ## Pipe Composition
 
-`createPipeHandlers` returns the same set of operations in **handlers-first** curried order — you define handlers once, get back a reusable function bound to the union type and discriminant. No generics needed at call sites. Exposes `match`, `matchWithDefault`, `matchAsync`, `matchWithDefaultAsync`, `matchAllAsync`, `map`, `mapAll`, `mapAsync`, `fold`, `foldWithDefault`, `foldAsync`, `count`, `partition`, and `is`.
+`createPipeHandlers` returns the same set of sync operations in **handlers-first** curried order — you define handlers once, get back a reusable function bound to the union type and discriminant. No generics needed at call sites. Exposes `match`, `matchWithDefault`, `map`, `mapAll`, `fold`, `foldWithDefault`, `count`, `partition`, and `is`. (Async helpers are standalone-only — see [Async Functions](#async-functions).)
 
 ```ts
 import { createPipeHandlers } from 'dismatch';
@@ -769,10 +784,10 @@ type NotificationFolder = FolderWithDefault<Notification, number, 'type'>;
 
 ### `AsyncMatcher` / `AsyncMatcherWithDefault` / `AsyncMapper` / `AsyncFolder` / `AsyncFolderWithDefault`
 
-Async counterparts to `Matcher`, `Mapper`, etc. Each handler may return either the sync result or a `Promise` of it. Use these only when defining a handler object away from the call site.
+Async counterparts to `Matcher`, `Mapper`, etc. — re-exported from the **`dismatch/async`** subpath alongside the runtime functions. Each handler may return either the sync result or a `Promise` of it. Use these only when defining a handler object away from the call site.
 
 ```ts
-import type { AsyncMatcher } from 'dismatch';
+import type { AsyncMatcher } from 'dismatch/async';
 
 type FetchProfile = AsyncMatcher<User, Profile, 'type'>;
 ```

@@ -294,7 +294,7 @@ describe('mapAll', () => {
   it('should throw when a handler is missing at runtime', () => {
     expect(() =>
       mapAll(rectangle)({ circle: (s: any) => s } as any),
-    ).toThrow('No handler');
+    ).toThrow(/unknown variant "rectangle"/);
   });
 
   it('should preserve the original discriminant when a mapper returns one', () => {

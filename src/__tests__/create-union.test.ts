@@ -18,6 +18,13 @@ const Animal = createUnion('kind', {
 
 type Animal = InferUnion<typeof Animal>;
 
+const Result = createUnion({
+  ok: (data: string) => ({ data }),
+  error: (message: string) => ({ message }),
+});
+
+type Result = InferUnion<typeof Result>;
+
 describe('createUnion', () => {
   describe('constructors', () => {
     it('should inject the discriminant into constructed values', () => {
@@ -364,6 +371,36 @@ describe('createUnion', () => {
 
     it('should expose variants as an array', () => {
       expect(Array.isArray(Shape.variants)).toBe(true);
+    });
+  });
+
+  describe('default discriminant overload', () => {
+    it('should inject "type" when called with only a schema', () => {
+      expect(Result.ok('done')).toEqual({ type: 'ok', data: 'done' });
+      expect(Result.error('failed')).toEqual({ type: 'error', message: 'failed' });
+    });
+
+    it('should expose "type" as the default discriminant', () => {
+      expect(Result.discriminant).toBe('type');
+      expect(Result.variants).toEqual(['ok', 'error']);
+    });
+
+    it('should support is and isKnown with the default discriminant', () => {
+      const value: Result = Result.ok('done');
+      expect(Result.is('ok')(value)).toBe(true);
+      expect(Result.is('error')(value)).toBe(false);
+      expect(Result.isKnown({ type: 'ok', data: 'done' })).toBe(true);
+      expect(Result.isKnown({ kind: 'ok', data: 'done' })).toBe(false);
+    });
+
+    it('should support bound helpers with the default discriminant', () => {
+      const describe = Result.match({
+        ok: ({ data }) => data.trim(),
+        error: ({ message }) => message.toUpperCase(),
+      });
+
+      expect(describe(Result.ok(' done '))).toBe('done');
+      expect(describe(Result.error('failed'))).toBe('FAILED');
     });
   });
 

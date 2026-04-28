@@ -11,10 +11,15 @@ export {
   createUnion,
   is,
   isUnion,
+  UnknownVariantError,
 } from './unions';
 export type {
   TakeDiscriminant,
   InferUnion,
+  Matcher,
+  MatcherWithDefault,
+  Mapper,
+  MapperAll,
   Folder,
   FolderWithDefault,
 } from './types';

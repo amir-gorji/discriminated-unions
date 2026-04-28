@@ -1,7 +1,7 @@
 import { defineConfig } from 'tsup';
 
 export default defineConfig({
-  entry: ['src/index.ts', 'src/remote-data.ts'],
+  entry: ['src/index.ts', 'src/remote-data.ts', 'src/async.ts'],
   format: ['cjs', 'esm'],
   dts: true,
   clean: true,

@@ -1,7 +1,7 @@
 {
   "name": "dismatch",
   "description": "A lightweight discriminated unions library for TypeScript",
-  "version": "2.4.0",
+  "version": "2.5.0",
   "main": "lib/index.js",
   "module": "lib/index.mjs",
   "types": "lib/index.d.ts",
@@ -24,6 +24,16 @@
       "require": {
         "types": "./lib/remote-data.d.ts",
         "default": "./lib/remote-data.js"
+      }
+    },
+    "./async": {
+      "import": {
+        "types": "./lib/async.d.mts",
+        "default": "./lib/async.mjs"
+      },
+      "require": {
+        "types": "./lib/async.d.ts",
+        "default": "./lib/async.js"
       }
     }
   },

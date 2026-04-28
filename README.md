@@ -5,12 +5,12 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue)](https://www.typescriptlang.org/)
 [![bundle size](https://img.shields.io/bundlephobia/minzip/dismatch)](https://bundlephobia.com/package/dismatch)
 
-Type-safe discriminated unions for TypeScript. Define once, get constructors, type guards, and exhaustive pattern matching — all from a single schema. Zero dependencies. ~2 kB minified.
+Type-safe discriminated unions for TypeScript. Define once, get constructors, type guards, exhaustive pattern matching, async dispatch, and runtime validation — all from a single schema. Zero dependencies. ~1.4 kB gzipped.
 
 ```ts
 import { createUnion, is, type InferUnion } from 'dismatch';
 
-const Shape = createUnion('type', {
+const Shape = createUnion({
   circle: (radius: number) => ({ radius }),
   rectangle: (width: number, height: number) => ({ width, height }),
 });
@@ -29,46 +29,90 @@ const area = Shape.match({
 area(Shape.circle(5)); // 78.54
 ```
 
+> **`switch` gives you exhaustiveness. `dismatch` gives you exhaustiveness plus reusable typed matchers, `map`, `fold`, `partition`, `count`, `is`, runtime validation, and async — all from a single schema.**
+
 ---
 
-## Table of Contents
+## Reusable matchers — define once, apply everywhere
 
-- [dismatch](#dismatch)
-  - [Table of Contents](#table-of-contents)
-  - [Install](#install)
-  - [Comparison](#comparison)
-    - [Why dismatch?](#why-dismatch)
-  - [Quick Start](#quick-start)
-    - [1. Define a union](#1-define-a-union)
-    - [2. Construct values](#2-construct-values)
-    - [3. Type guards](#3-type-guards)
-    - [4. Pattern matching](#4-pattern-matching)
-    - [5. Metadata](#5-metadata)
-  - [Standalone Functions](#standalone-functions)
-    - [`match`](#match)
-    - [`matchWithDefault`](#matchwithdefault)
-    - [`map` / `mapAll`](#map--mapall)
-    - [`fold`](#fold)
-    - [`foldWithDefault`](#foldwithdefault)
-    - [`is`](#is)
-    - [`count`](#count)
-    - [`partition`](#partition)
-    - [`isUnion`](#isunion)
-    - [`createPipeHandlers`](#createpipehandlers)
-  - [Type Helpers](#type-helpers)
-    - [`InferUnion<T>`](#inferuniont)
-    - [`TakeDiscriminant<T>`](#takediscriminantt)
-    - [`Folder<T, Acc, Discriminant>`](#foldert-acc-discriminant)
-    - [`FolderWithDefault<T, Acc, Discriminant>`](#folderwithdefaultt-acc-discriminant)
-  - [Custom Discriminant](#custom-discriminant)
-  - [Patterns](#patterns)
-    - [Rendering UI](#rendering-ui)
-    - [Reducer](#reducer)
-    - [Pipe Composition](#pipe-composition)
-  - [RemoteData](#remotedata)
-  - [Clean Stack Traces](#clean-stack-traces)
-  - [Contributing](#contributing)
-  - [License](#license)
+The killer differentiator: handlers-first matching returns a typed, reusable function. Other libraries make every match one-shot.
+
+```ts
+// dismatch — handlers-first, returns a reusable function directly
+const getArea = Shape.match({
+  circle: ({ radius }) => Math.PI * radius ** 2,
+  rectangle: ({ width, height }) => width * height,
+});
+
+shapes.map(getArea); // just works
+shapes.filter(Shape.is('circle')); // narrowed to Circle[]
+
+// ts-pattern — every match is inline, one-shot, wrapped in a function
+const getArea = (shape: Shape): number =>
+  match(shape)
+    .with({ type: 'circle' }, ({ radius }) => Math.PI * radius ** 2)
+    .with({ type: 'rectangle' }, ({ width, height }) => width * height)
+    .exhaustive();
+```
+
+No wrapper lambdas, no `.exhaustive()`, no `{ type: '…' }` noise. Exhaustiveness is enforced by TypeScript itself — adding a variant breaks every unhandled call site at compile time.
+
+---
+
+> **Already have union types?** If your discriminated unions are already declared, skip `createUnion`.
+>
+> ```ts
+> // Reusable handlers bound to your type — define once, use many times
+> const shapeOps = createPipeHandlers<Shape>('type');
+> const getArea = shapeOps.match({
+>   circle: ({ radius }) => Math.PI * radius ** 2,
+>   rectangle: ({ width, height }) => width * height,
+> });
+> shapes.map(getArea);
+>
+> // Or use standalone functions directly on any value
+> const area = match(shape)({
+>   circle: ({ radius }) => Math.PI * radius ** 2,
+>   rectangle: ({ width, height }) => width * height,
+> });
+> ```
+>
+> See [Pipe Composition](#pipe-composition) and [Standalone Functions](#standalone-functions) for the full API.
+
+---
+
+## Async matching
+
+Async handlers in TypeScript normally infer to `Promise<A> | Promise<B>` instead of `Promise<A | B>` — forcing manual `await` + cast. `matchAsync` (and friends) unify the result. Async lives in the dedicated **`dismatch/async`** subpath — the main entry stays lean for sync-only consumers; pull async in only where you need it.
+
+```ts
+import { matchAsync, matchAllAsync, foldAsync } from 'dismatch/async';
+
+// Single value — returns Promise<AdminProfile | GuestProfile | { reason: string }>
+const profile = await matchAsync(user)({
+  admin: async ({ id }) => fetchAdminProfile(id),
+  guest: async ({ id }) => fetchGuestProfile(id),
+  banned: async ({ reason }) => ({ reason }) as const,
+});
+
+// Parallel over a collection — Promise.all under the hood, order preserved
+const profiles = await matchAllAsync(users)({
+  admin: async ({ id }) => fetchAdminProfile(id),
+  guest: async ({ id }) => fetchGuestProfile(id),
+  banned: async ({ reason }) => ({ reason }) as const,
+});
+
+// Sequential async fold — accumulator threads through `await`
+const total = await foldAsync(
+  events,
+  0,
+)({
+  click: async (acc, { x }) => acc + x,
+  key: async (acc) => acc + 1,
+});
+```
+
+Mixing sync and async handlers is fine — the result still unifies to `Promise<R>`. See [Async Functions](#async-functions) for the full surface (`matchAsync`, `matchWithDefaultAsync`, `matchAllAsync`, `mapAsync`, `foldAsync`, `foldWithDefaultAsync`).
 
 ---
 
@@ -80,86 +124,68 @@ npm install dismatch
 
 ---
 
+## Table of Contents
+
+- [Reusable matchers](#reusable-matchers--define-once-apply-everywhere)
+- [Async matching](#async-matching)
+- [Install](#install)
+- [Comparison](#comparison)
+- [Quick Start](#quick-start)
+- [Standalone Functions](#standalone-functions)
+- [Async Functions (`dismatch/async`)](#async-functions)
+- [Pipe Composition](#pipe-composition)
+- [Type Helpers](#type-helpers)
+- [Custom Discriminant](#custom-discriminant)
+- [Patterns](#patterns)
+- [RemoteData](#remotedata)
+- [Runtime Errors & Clean Stack Traces](#runtime-errors--clean-stack-traces)
+- [Contributing](#contributing)
+- [License](#license)
+
+---
+
 ## Comparison
 
-`dismatch` is purpose-built only for discriminated unions in TypeScript.
+> **`ts-pattern` matches any pattern. `dismatch` manages discriminated unions — and is the only one with first-class async.**
 
-| Capability                                | dismatch                | ts-pattern | unionize       | @effect/match     |
-| ----------------------------------------- | ----------------------- | ---------- | -------------- | ----------------- |
-| Bundle size                               | **~2 kB**               | ~7.7 kB    | unclear        | large (ecosystem) |
-| Zero dependencies                         | Yes                     | Yes        | Yes            | No                |
-| Exhaustive matching (compile time)        | Yes                     | Yes        | Yes            | Yes               |
-| Schema-aware runtime validation           | **Yes**                 | No         | No             | No                |
-| Single + multi-variant narrowing (`is`)   | **Yes**                 | No         | No             | No                |
-| Collection folding (`fold`)               | **Yes**                 | No         | No             | No                |
-| Collection counters (`count`/`partition`) | **Yes**                 | No         | No             | No                |
-| Partial transforms (`map`)                | **Yes**                 | No         | No             | No                |
-| Clean stack traces                        | **Yes**                 | No         | No             | No                |
-| Passing payload to handlers               | **Yes**                 | No         | No             | No                |
-| Single-schema union toolkit               | **Yes** (`createUnion`) | No         | Yes (inactive) | No                |
-| Maintenance                               | Active                  | Active     | Inactive       | Active            |
-| Beyond discriminated unions               | No                      | Yes        | No             | Yes               |
+| Capability                                          |          dismatch          |      ts-pattern       | unionize  |    @effect/match     |
+| --------------------------------------------------- | :------------------------: | :-------------------: | :-------: | :------------------: |
+| **Footprint**                                       |                            |                       |           |                      |
+| Size, minified (full main entry, not gzipped)     |        **~3.4 kB**         |        ~7.7 kB        | unclear   |    ecosystem-tied    |
+| Zero dependencies                                   |             ✓              |           ✓           |     ✓     |          ✗           |
+| Per-function tree-shaking                           |             ✓              |        partial        |     —     |       partial        |
+| Active maintenance                                  |             ✓              |           ✓           | ✗ (2018)  |          ✓           |
+| **Compile-time correctness**                        |                            |                       |           |                      |
+| Exhaustive matching for DUs                         |             ✓              | ✓ via `.exhaustive()` |     ✓     |          ✓           |
+| No `{ type: '…' }` / `.with()` ceremony per branch  |             ✓              |           ✗           |     ✓     |          ✗           |
+| Reusable, curried handlers (define once, reuse)     |             ✓              |     ✗ (one-shot)      |     ✓     |       partial        |
+| Sub-union narrowing on `.filter()` / `.find()`      |             ✓              |           ✗           |     ✗     |          ✗           |
+| Payload threaded through every handler              |             ✓              |           ✗           |     ✗     |          ✗           |
+| **Async — unique to dismatch**                      |                            |                       |           |                      |
+| `matchAsync` — single value, unified `Promise<R>`   |           **✓**            |           ✗           |     ✗     |          ✗           |
+| `matchWithDefaultAsync` — partial async             |           **✓**            |           ✗           |     ✗     |          ✗           |
+| `matchAllAsync` — parallel, order-preserved         |           **✓**            |           ✗           |     ✗     |          ✗           |
+| `foldAsync` — sequential aggregation                |           **✓**            |           ✗           |     ✗     |          ✗           |
+| `foldWithDefaultAsync`                              |           **✓**            |           ✗           |     ✗     |          ✗           |
+| `mapAsync` — async partial transform                |           **✓**            |           ✗           |     ✗     |          ✗           |
+| Mixed sync + async handlers still unify             |           **✓**            |           ✗           |     ✗     |          ✗           |
+| **Variant-aware collections**                       |                            |                       |           |                      |
+| `fold` — exhaustive single-pass aggregation         |             ✓              |           ✗           |     ✗     |          ✗           |
+| `foldWithDefault` — partial aggregation             |             ✓              |           ✗           |     ✗     |          ✗           |
+| `count` by variant(s)                               |             ✓              |           ✗           |     ✗     |          ✗           |
+| `partition` (both sides narrowed)                   |             ✓              |           ✗           |     ✗     |          ✗           |
+| `map` partial transform (discriminant kept)         |             ✓              |           ✗           |     ✗     |          ✗           |
+| `mapAll` exhaustive transform                       |             ✓              |           ✗           |     ✗     |          ✗           |
+| **Runtime & schema**                                |                            |                       |           |                      |
+| `createUnion` — one schema, full toolkit            |             ✓              |           ✗           | ✓ (stale) |          ✗           |
+| `isKnown` — schema-membership check                 |             ✓              |           ✗           |     ✗     | via `@effect/schema` |
+| Named `UnknownVariantError` (`.variant`, `.known`)  |             ✓              |           ✗           |     ✗     |          ✗           |
+| Clean stack traces (point at your call site)        |             ✓              |           ✗           |     ✗     |          ✗           |
+| Companion async-state union (`dismatch/remote-data`)|             ✓              |           ✗           |     ✗     |          ✗           |
 
-`dismatch` is the most complete discriminated union toolkit in TypeScript with rare features.
+> **Need regex, wildcards, nested object patterns, or class-instance matching?** Use `ts-pattern` — those aren't DU problems. For the 90% of TypeScript code where unions look like `{ type: 'x' } | { type: 'y' }`, `dismatch` is the scalpel.
 
-### Why dismatch?
-
-**ts-pattern matches any pattern. dismatch manages discriminated unions.**
-
-Most TypeScript apps live and breathe `{ type: 'x' } | { type: 'y' }`. For that world, dismatch replaces an entire category of hand-written boilerplate with a single schema — constructors, guards, matchers, transforms, and collection ops — in 1.8 kB.
-
-**The everyday match — zero ceremony:**
-
-```ts
-// ts-pattern
-const label = match(state)
-  .with({ type: 'loading' }, () => 'Loading…')
-  .with({ type: 'error' }, ({ error }) => error.message)
-  .exhaustive();
-
-// dismatch — the variant name *is* the pattern
-const label = match(state)({
-  loading: () => 'Loading…',
-  error: ({ error }) => error.message,
-});
-```
-
-No `.with()`, no `{ type: '…' }` wrappers, no `.exhaustive()`. Exhaustiveness is enforced by TypeScript itself — not an opt-in method call.
-
-**Reusable matchers — define once, apply everywhere:**
-
-```ts
-// ts-pattern — every match is inline, one-shot, wrapped in a function
-const getArea = (shape: Shape): number =>
-  match(shape)
-    .with({ type: 'circle' }, ({ radius }) => Math.PI * radius ** 2)
-    .with({ type: 'rectangle' }, ({ width, height }) => width * height)
-    .exhaustive();
-
-// dismatch — handlers-first, returns a reusable function directly
-const getArea = Shape.match({
-  circle: ({ radius }) => Math.PI * radius ** 2,
-  rectangle: ({ width, height }) => width * height,
-});
-
-shapes.map(getArea); // just works
-shapes.filter(Shape.is('circle')); // narrowed to Circle[]
-```
-
-No other library lets you define handlers once and get back a typed, reusable function. This is the killer differentiator.
-
-**Things no TypeScript library offers — except dismatch:**
-
-| Capability                    | What it saves you                                                                                                               |
-| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| `is(['ok', 'error'])`         | Multi-variant narrowing to a proper sub-union — no manual type guards                                                           |
-| `map({ error: ... })`         | Partial transforms where unmatched variants pass through unchanged — no `...spread`, no identity fallbacks                      |
-| `fold(items, init)(handlers)` | Exhaustive aggregation in one pass — no `reduce` + `match` + `.exhaustive()` sandwich                                           |
-| `count(items, 'error')`       | Variant-aware counting without `.filter().length` and the throwaway array                                                       |
-| `partition(items, 'ok')`      | Split with narrowed types on _both_ sides — no two-pass `.filter()`                                                             |
-| `createUnion(...)`            | One schema produces constructors, guards, matchers, transforms, metadata. Others give you matching; the rest you write by hand. |
-
-> Instead of being a swiss-army knife, dismatch chose to be a scalpel for the one thing TypeScript developers do most.
+**You don't pay for what you don't use.** Every standalone function is independently tree-shakable. The gzipped figure above is worst-case (everything imported); a project that only uses `match` and `is` ships well under 1 kB. ESM, `sideEffects: false`, and zero internal cross-references mean modern bundlers (esbuild, rollup, vite, webpack 5+) drop unused exports automatically.
 
 ---
 
@@ -167,12 +193,17 @@ No other library lets you define handlers once and get back a typed, reusable fu
 
 ### 1. Define a union
 
-`createUnion` takes a discriminant key and a schema of constructor functions. Each constructor returns the data fields — the discriminant is injected automatically.
+`createUnion` has two forms:
+
+- `createUnion(schema)` — uses the default discriminant key `'type'`
+- `createUnion(discriminant, schema)` — lets you use a different key such as `'kind'`
+
+The **discriminant** is the string-tag property that tells `dismatch` which variant a value is. In `{ type: 'ok', data: '...' }`, the discriminant key is `type`, and the active variant is `'ok'`. Constructors return only the data fields — `createUnion` injects the discriminant automatically.
 
 ```ts
 import { createUnion, type InferUnion } from 'dismatch';
 
-const Result = createUnion('type', {
+const Result = createUnion({
   ok: (data: string) => ({ data }),
   error: (message: string) => ({ message }),
   loading: () => ({}),
@@ -180,6 +211,18 @@ const Result = createUnion('type', {
 
 type Result = InferUnion<typeof Result>;
 // { type: 'ok'; data: string } | { type: 'error'; message: string } | { type: 'loading' }
+```
+
+If your union already uses a different tag key, pass it explicitly:
+
+```ts
+const Event = createUnion('kind', {
+  click: (x: number) => ({ x }),
+  key: (code: string) => ({ code }),
+});
+
+type Event = InferUnion<typeof Event>;
+// { kind: 'click'; x: number } | { kind: 'key'; code: string }
 ```
 
 ### 2. Construct values
@@ -223,11 +266,9 @@ const settled = results.filter(Result.is(['ok', 'error']));
 // settled: ({ type: 'ok'; data: string } | { type: 'error'; message: string })[]
 ```
 
-> **Removed in 2.0.0**: the per-variant `Result.is.ok` / `Result.is.error` bound guards and the old `narrow` export are gone. Use `is(value, 'variant')` for narrowing and `Result.is('variant')` (or standalone `createPipeHandlers(...).is(...)`) for predicate-factory use.
-
 ### 4. Pattern matching
 
-All four matchers are bound to the factory and curried **handlers-first** — define once, apply many times:
+All matchers are bound to the factory and curried **handlers-first** — define once, apply many times:
 
 ```ts
 // Exhaustive — every variant must have a handler
@@ -246,7 +287,6 @@ const banner = Result.matchWithDefault({
 });
 
 // Transform — modify specific variants, rest pass through unchanged
-// The discriminant is re-injected automatically — no need to return it
 const cleared = Result.map({
   error: ({ message }) => ({ message: '' }),
 });
@@ -264,8 +304,9 @@ const stats = Result.fold(results, { oks: 0, errors: 0, loadings: 0 })({
   error: (acc) => ({ ...acc, errors: acc.errors + 1 }),
   loading: (acc) => ({ ...acc, loadings: acc.loadings + 1 }),
 });
-// Expect stats = { circles: 2, totalArea: 416.699 }
 ```
+
+> Need async? Import from [`dismatch/async`](#async-functions) — `matchAsync`, `matchAllAsync`, `foldAsync`, etc. work on any union (factory, ad-hoc, or third-party).
 
 ### 5. Metadata
 
@@ -278,7 +319,7 @@ Result.discriminant; // 'type'
 
 ## Standalone Functions
 
-You can use dismatch functions directly on any discriminated union — no factory required.
+You can use dismatch functions directly on any discriminated union — no factory required. For async equivalents, see [Async Functions](#async-functions).
 
 ### `match`
 
@@ -352,6 +393,26 @@ const shapes: Shape[] = [
 ];
 ```
 
+**dismatch — `fold`:**
+
+```ts
+import { fold } from 'dismatch';
+
+const stats = fold(shapes, { circles: 0, totalArea: 0 })({
+  circle: (acc, { radius }) => ({
+    circles: acc.circles + 1,
+    totalArea: acc.totalArea + Math.PI * radius ** 2,
+  }),
+  rectangle: (acc, { width, height }) => ({
+    ...acc,
+    totalArea: acc.totalArea + width * height,
+  }),
+});
+// stats: { circles: 2, totalArea: 24 + Math.PI * (25 + 100) }
+```
+
+Exhaustive, single-pass, and purpose-built — no `reduce` wrapper, no `.exhaustive()` call, no `{ type: '…' }` noise. Compare to the alternatives:
+
 **Plain TypeScript — manual `reduce` with a `switch`:**
 
 ```ts
@@ -397,25 +458,6 @@ const stats = shapes.reduce(
 
 Exhaustive, but three layers of indirection (`reduce` → `match` → `.exhaustive()`) for a single operation.
 
-**dismatch — `fold`:**
-
-```ts
-import { fold } from 'dismatch';
-
-const stats = fold(shapes, { circles: 0, totalArea: 0 })({
-  circle: (acc, { radius }) => ({
-    circles: acc.circles + 1,
-    totalArea: acc.totalArea + Math.PI * radius ** 2,
-  }),
-  rectangle: (acc, { width, height }) => ({
-    ...acc,
-    totalArea: acc.totalArea + width * height,
-  }),
-});
-```
-
-Exhaustive, single-pass, and purpose-built — no `reduce` wrapper, no `.exhaustive()` call, no `{ type: '…' }` noise.
-
 ### `foldWithDefault`
 
 Partial collection aggregation with a required `Default` fallback. Unlike `fold`, not every variant needs a handler — unhandled variants route to `Default`, which receives the full union item so you can inspect which variant fell through.
@@ -452,21 +494,6 @@ const log = foldWithDefault(
 });
 ```
 
-**Custom discriminant:**
-
-```ts
-foldWithDefault(
-  events,
-  0,
-  'kind',
-)({
-  click: (acc, { x, y }) => acc + 1,
-  Default: (acc) => acc,
-});
-```
-
-`foldWithDefault` is also available as a curried method on `createPipeHandlers` and `createUnion` — see [`createPipeHandlers`](#createpipehandlers).
-
 ### `is`
 
 Value-first type guard for discriminated unions. Covers single-variant and multi-variant narrowing inside `if` blocks.
@@ -490,7 +517,7 @@ is(event, 'click', 'kind');
 is(event, ['click', 'keydown'], 'kind');
 ```
 
-For `.filter()`, `.find()`, or pipe composition, use [`createPipeHandlers(...).is(...)`](#createpipehandlers) — variant-first and fully inferred without call-site generics.
+For `.filter()`, `.find()`, or pipe composition, use [`createPipeHandlers(...).is(...)`](#pipe-composition) — variant-first and fully inferred without call-site generics.
 
 ### `count`
 
@@ -546,9 +573,124 @@ isUnion(null); // false
 isUnion({ kind: 'click' }, 'kind'); // true — custom discriminant
 ```
 
-### `createPipeHandlers`
+### `UnknownVariantError`
 
-Handlers-first curried order for pipe composition. Define handlers once, get back a reusable function. Exposes `match`, `matchWithDefault`, `map`, `mapAll`, `fold`, `foldWithDefault`, `count`, `partition`, and `is` — all bound to the union type and discriminant, so no generics are needed at call sites.
+Thrown by exhaustive matchers (`match`, `matchAsync`, `fold`, etc.) when a runtime value carries a variant that no handler covers and no `Default` fallback is provided. This is a strict superset of what a native `switch` can detect — `switch` silently falls through to `default`; dismatch throws with the specific variant name and the set of known handlers.
+
+```ts
+import { match, UnknownVariantError } from 'dismatch';
+
+try {
+  match(apiResponse)({
+    ok: ({ data }) => data,
+    error: ({ message }) => `Error: ${message}`,
+  });
+} catch (e) {
+  if (e instanceof UnknownVariantError) {
+    console.error(`Got "${e.variant}", expected one of: ${e.known.join(', ')}`);
+    // e.variant: string — the unknown tag at runtime
+    // e.known:   readonly string[] — handler keys that were registered
+  }
+}
+```
+
+`matchWithDefault` / `matchWithDefaultAsync` / `foldWithDefault` never throw this — they route to `Default` instead.
+
+---
+
+## Async Functions
+
+Imported from the dedicated **`dismatch/async`** subpath — keeps the main entry lean for sync-only consumers; pull async in only where you need it. Standalone-only by design (no factory or pipe-handlers binding) — so async lives at `await matchAsync(value)(handlers)`, never on `Result.matchAsync(...)` or `pipeHandlers.matchAsync(...)`.
+
+Async handlers may freely mix with sync ones — the result still unifies to `Promise<R>`, never `Promise<A> | Promise<B>`.
+
+### `matchAsync`
+
+Exhaustive async pattern matching. Throws `UnknownVariantError` if a runtime variant has no handler.
+
+```ts
+import { matchAsync } from 'dismatch/async';
+
+const profile = await matchAsync(user)({
+  admin: async ({ id }) => fetchAdminProfile(id),
+  guest: async ({ id }) => fetchGuestProfile(id),
+  banned: ({ reason }) => ({ kind: 'banned', reason }), // sync handler is fine
+});
+```
+
+### `matchWithDefaultAsync`
+
+Partial async matching with an async-or-sync `Default` fallback.
+
+```ts
+import { matchWithDefaultAsync } from 'dismatch/async';
+
+const status = await matchWithDefaultAsync(result)({
+  ok: async ({ data }) => `Loaded ${data.length} items`,
+  Default: () => 'Idle',
+});
+```
+
+### `matchAllAsync`
+
+Parallel per-item async dispatch over a collection. Each item runs through its variant handler concurrently via `Promise.all`. Order is preserved. Use when handlers are independent (no shared accumulator).
+
+```ts
+import { matchAllAsync } from 'dismatch/async';
+
+const profiles = await matchAllAsync(users)({
+  admin: async ({ id }) => fetchAdminProfile(id),
+  guest: async ({ id }) => fetchGuestProfile(id),
+});
+//    ^? (AdminProfile | GuestProfile)[]
+```
+
+### `mapAsync`
+
+Async partial transform. Like `map`, but handlers may return a Promise. Unmatched variants pass through unchanged. Result is `Promise<T>`.
+
+```ts
+import { mapAsync } from 'dismatch/async';
+
+const enriched = await mapAsync(shape)({
+  circle: async ({ radius }) => ({ radius: await fetchScaled(radius) }),
+});
+```
+
+### `foldAsync`
+
+Sequential async fold. Each handler may return `Acc` or `Promise<Acc>`. The accumulator threads through `await`, so handlers run strictly in array order. For parallel per-item dispatch (independent handlers), use [`matchAllAsync`](#matchallasync).
+
+```ts
+import { foldAsync } from 'dismatch/async';
+
+const total = await foldAsync(
+  events,
+  0,
+)({
+  click: async (acc, { x }) => acc + (await scoreClick(x)),
+  key: (acc) => acc + 1,
+});
+```
+
+### `foldWithDefaultAsync`
+
+Partial async fold with an async-or-sync `Default` fallback. Sequential — accumulator threads through `await`.
+
+```ts
+import { foldWithDefaultAsync } from 'dismatch/async';
+
+const summary = await foldWithDefaultAsync(events, '')({
+  click: async (acc, { x }) => `${acc} click@${await label(x)}`,
+  Default: (acc) => acc,
+});
+```
+
+---
+
+## Pipe Composition
+
+`createPipeHandlers` returns the same set of sync operations in **handlers-first** curried order — you define handlers once, get back a reusable function bound to the union type and discriminant. No generics needed at call sites. Exposes `match`, `matchWithDefault`, `map`, `mapAll`, `fold`, `foldWithDefault`, `count`, `partition`, and `is`. (Async helpers are standalone-only — see [Async Functions](#async-functions).)
 
 ```ts
 import { createPipeHandlers } from 'dismatch';
@@ -560,7 +702,7 @@ type Shape =
 const shapeOps = createPipeHandlers<Shape>('type');
 
 const getArea = shapeOps.match({
-  circle: ({ radius }) => Math.PI * radius ** 2, // calculate the area, then round in 2 decimal places
+  circle: ({ radius }) => Math.PI * radius ** 2,
   rectangle: ({ width, height }) => width * height,
 });
 
@@ -569,7 +711,7 @@ const shapes: Shape[] = [
   { type: 'rectangle', width: 2, height: 3 },
 ];
 
-shapes.map(getArea); // Expect -> [3.14, 6]
+shapes.map(getArea); // [3.14, 6]
 
 // Variant-first type guard — slots directly into .filter(), no generics needed
 const circles = shapes.filter(shapeOps.is('circle'));
@@ -586,7 +728,21 @@ const volume = shapeOps.match<number, { depth: number }>({
 
 const shape: Shape = { type: 'rectangle', width: 2, height: 5 };
 
-volume(shape, { depth: 10 }); // Expect -> 100
+volume(shape, { depth: 10 }); // 100
+```
+
+**Compose inside a `pipe`:**
+
+```ts
+import { pipe } from 'fp-ts/function'; // or any pipe utility
+
+const result = pipe(
+  shape,
+  shapeOps.match({
+    circle: () => 'round',
+    rectangle: () => 'flat',
+  }),
+);
 ```
 
 | Use case                                   | Prefer                   |
@@ -615,42 +771,34 @@ Extracts valid discriminant keys from a union type — keys with narrow string v
 type D = TakeDiscriminant<Shape>; // 'type'
 ```
 
-### `Folder<T, Acc, Discriminant>`
+### `Folder<T, Acc, Discriminant>` / `FolderWithDefault<T, Acc, Discriminant>`
 
-Handler map type for `fold` — each handler takes `(accumulator, variantData)` and returns the new accumulator.
-
-> Most of the time you won't need to import this. TypeScript infers the handler types when you pass them inline to `fold`. Reach for `Folder` only when you need to define or annotate a handler object separately from the call site.
+Handler map types for `fold` / `foldWithDefault`. Most of the time you don't need to import these — TypeScript infers handler types when you pass them inline. Reach for them only when you need to define a handler object separately from the call site.
 
 ```ts
-import type { Folder } from 'dismatch';
+import type { Folder, FolderWithDefault } from 'dismatch';
 
 type ShapeFolder = Folder<Shape, number, 'type'>;
-// { circle: (acc: number, input: { radius: number }) => number; rectangle: ... }
+type NotificationFolder = FolderWithDefault<Notification, number, 'type'>;
 ```
 
-### `FolderWithDefault<T, Acc, Discriminant>`
+### `AsyncMatcher` / `AsyncMatcherWithDefault` / `AsyncMapper` / `AsyncFolder` / `AsyncFolderWithDefault`
 
-Handler map type for `foldWithDefault` — variant handlers are optional and `Default` is required. `Default` receives the full union item `T` (not stripped data) so you can inspect which variant fell through.
-
-> Same as `Folder` — you rarely need this explicitly. It's there for when you pre-define a `foldWithDefault` handler object and want TypeScript to check it at the definition site rather than at the call site.
+Async counterparts to `Matcher`, `Mapper`, etc. — re-exported from the **`dismatch/async`** subpath alongside the runtime functions. Each handler may return either the sync result or a `Promise` of it. Use these only when defining a handler object away from the call site.
 
 ```ts
-import type { FolderWithDefault } from 'dismatch';
+import type { AsyncMatcher } from 'dismatch/async';
 
-type NotificationFolder = FolderWithDefault<Notification, number, 'type'>;
-// {
-//   push?: (acc: number, input: { urgent: boolean; message: string }) => number;
-//   email?: (acc: number, input: { subject: string }) => number;
-//   sms?: (acc: number, input: { from: string }) => number;
-//   Default: (acc: number, item: Notification) => number;
-// }
+type FetchProfile = AsyncMatcher<User, Profile, 'type'>;
 ```
 
 ---
 
 ## Custom Discriminant
 
-I recommend using `'type'` as your discriminant key. It is the default for all standalone functions, so you never need to pass it explicitly:
+I recommend using `'type'` when you control the shape of the union. In `dismatch`, the discriminant is just the property that stores the variant tag. So in `{ type: 'dog', name: 'Rex' }`, the discriminant key is `type`, and the active variant is `'dog'`.
+
+`'type'` is the library default, so you can usually omit it entirely:
 
 ```ts
 type Animal = { type: 'dog'; name: string } | { type: 'cat'; lives: number };
@@ -659,13 +807,13 @@ match(animal)({ dog: ({ name }) => name, cat: () => 'meow' });
 is(animal, 'dog');
 isUnion(animal);
 
-const Animal = createUnion('type', {
+const Animal = createUnion({
   dog: (name: string) => ({ name }),
   cat: (lives: number) => ({ lives }),
 });
 ```
 
-If you need a different discriminant, all functions accept it as an extra argument:
+If your data already uses a different property name, pass that key explicitly:
 
 ```ts
 type Animal = { kind: 'dog'; name: string } | { kind: 'cat'; lives: number };
@@ -713,22 +861,6 @@ const reduce = (state: number, action: Action): number =>
   });
 ```
 
-### Pipe Composition
-
-```ts
-import { pipe } from 'fp-ts/function'; // or any pipe utility
-
-const shapeOps = createPipeHandlers<Shape>('type');
-
-const result = pipe(
-  shape,
-  shapeOps.match({
-    circle: () => 'round',
-    rectangle: () => 'flat',
-  }),
-);
-```
-
 ---
 
 ## RemoteData
@@ -746,24 +878,29 @@ state = RemoteData.loading();
 state = RemoteData.ok(users);
 
 const content = match(state)({
-  idle:       ()         => 'Click to load',
-  loading:    ()         => 'Loading…',
+  idle: () => 'Click to load',
+  loading: () => 'Loading…',
   refreshing: ({ data }) => `Refreshing ${data.length} items…`,
-  ok:         ({ data }) => `Loaded ${data.length} items`,
-  failed:     ({ error }) => `Error: ${error.message}`,
+  ok: ({ data }) => `Loaded ${data.length} items`,
+  failed: ({ error }) => `Error: ${error.message}`,
 });
 ```
 
 ---
 
-## Clean Stack Traces
+## Runtime Errors & Clean Stack Traces
 
 When dismatch throws, the stack trace points to **your call site** — not library internals:
 
 ```
-Error: Data is not of type discriminated union!
+UnknownVariantError: dismatch: unknown variant "weird" (known: ok, error, loading)
     at handleResponse (src/api.ts:27:18)   // ← your code, not ours
 ```
+
+Two thrown error shapes:
+
+- `UnknownVariantError` — exhaustive matcher hit a runtime variant with no handler. Catchable by class; carries `.variant` and `.known`. See [`UnknownVariantError`](#unknownvarianterror).
+- Plain `Error('Not a union')` — input value is not a valid discriminated union (null, primitive, array, missing/non-string discriminant property).
 
 ---
 

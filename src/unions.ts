@@ -574,49 +574,49 @@ export function createPipeHandlers<
   T extends SampleUnion<Discriminant>,
   Discriminant extends TakeDiscriminant<T> = TakeDiscriminant<T>,
 >(discriminant: Discriminant) {
-  // Wraps standalone(input, discriminant, payload?)(handlers) into pipe-curry shape.
-  const wI = (fn: any) => (handlers: any) => (input: any, payload?: any) =>
+  // Binds standalone(input, discriminant, payload?)(handlers) into pipe-curry shape.
+  const bindItem = (fn: any) => (handlers: any) => (input: any, payload?: any) =>
     fn(input, discriminant, payload)(handlers);
 
-  // Wraps standalone(items, initial, discriminant)(handlers) into pipe-curry shape.
-  const wF = (fn: any) => (items: any, initial: any) => (handlers: any) =>
+  // Binds standalone(items, initial, discriminant)(handlers) into pipe-curry shape.
+  const bindFold = (fn: any) => (items: any, initial: any) => (handlers: any) =>
     fn(items, initial, discriminant)(handlers);
 
   return {
-    match: wI(match) as <U, Payload extends any = never>(
+    match: bindItem(match) as <U, Payload extends any = never>(
       handlers: Matcher<T, U, Discriminant, Payload>,
     ) => (
       input: T,
       ...args: [Payload] extends [never] ? [] : [payload: Payload]
     ) => U,
 
-    matchWithDefault: wI(matchWithDefault) as <U, Payload extends any = never>(
+    matchWithDefault: bindItem(matchWithDefault) as <U, Payload extends any = never>(
       handlers: MatcherWithDefault<T, U, Discriminant, Payload>,
     ) => (
       input: T,
       ...args: [Payload] extends [never] ? [] : [payload: Payload]
     ) => U,
 
-    map: wI(map) as <Payload extends any = never>(
+    map: bindItem(map) as <Payload extends any = never>(
       handlers: Mapper<T, Discriminant, Payload>,
     ) => (
       input: T,
       ...args: [Payload] extends [never] ? [] : [payload: Payload]
     ) => T,
 
-    mapAll: wI(mapAll) as <Payload extends any = never>(
+    mapAll: bindItem(mapAll) as <Payload extends any = never>(
       handlers: MapperAll<T, Discriminant, Payload>,
     ) => (
       input: T,
       ...args: [Payload] extends [never] ? [] : [payload: Payload]
     ) => T,
 
-    fold: wF(fold) as <Acc>(
+    fold: bindFold(fold) as <Acc>(
       items: readonly T[],
       initial: Acc,
     ) => (handlers: Folder<T, Acc, Discriminant>) => Acc,
 
-    foldWithDefault: wF(foldWithDefault) as <Acc>(
+    foldWithDefault: bindFold(foldWithDefault) as <Acc>(
       items: readonly T[],
       initial: Acc,
     ) => (handlers: FolderWithDefault<T, Acc, Discriminant>) => Acc,
@@ -676,11 +676,11 @@ export function createPipeHandlers<
  * });
  * ```
  */
-const RESERVED_UNION_KEYS = new Set<string>(
-  'is isKnown match matchWithDefault map mapAll fold foldWithDefault count partition variants discriminant _union'.split(
-    ' ',
-  ),
-);
+const RESERVED_UNION_KEYS = new Set<string>([
+  'is', 'isKnown', 'match', 'matchWithDefault', 'map', 'mapAll',
+  'fold', 'foldWithDefault', 'count', 'partition',
+  'variants', 'discriminant', '_union',
+]);
 
 type ValidUnionSchema<D extends string, Schema extends UnionSchema<D>> =
   string extends keyof Schema

@@ -123,6 +123,8 @@ export function matchAllAsync<
   return <Result>(matcher: AsyncMatcher<T, Result, Discriminant, Payload>) =>
     Promise.all(
       items.map(async (item) => {
+        // Validation runs concurrently inside Promise.all — unlike sync reduce,
+        // which validates each item before starting the next.
         ensureUnion(item, discriminant, matchAllAsync);
         return dispatch<T, Result | Promise<Result>, Discriminant, Payload>(
           item,
